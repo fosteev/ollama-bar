@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 /// Type, spacing and colour taken from the design spec (docs/DESIGN_BRIEF.md → Claude Design).
@@ -69,6 +70,29 @@ extension View {
             .padding(.bottom, bottom ?? vertical)
             .padding(.horizontal, Panel.Metrics.blockHorizontal)
             .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// Opens the Settings scene and brings it to the front.
+///
+/// An `LSUIElement` app has no menu bar, so there is no Settings menu item and no ⌘, — this link
+/// is the only way in. `SettingsLink` alone opens the window while the app stays inactive, which
+/// leaves it behind whatever the user was looking at, so the activation is not optional.
+struct OpenSettingsButton: View {
+    let title: String
+
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button(title) {
+            // Open first, activate after: clicking the panel tears its view hierarchy down, and
+            // an action dispatched after that teardown can be dropped.
+            openSettings()
+            DispatchQueue.main.async {
+                NSApplication.shared.activate(ignoringOtherApps: true)
+            }
+        }
+        .buttonStyle(.link)
     }
 }
 

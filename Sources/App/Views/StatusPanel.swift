@@ -100,8 +100,7 @@ struct StatusPanel: View {
                 Text("Output not captured")
                     .foregroundStyle(.tertiary)
                 Spacer()
-                SettingsLink { Text("Turn on interception…") }
-                    .buttonStyle(.link)
+                OpenSettingsButton(title: "Turn on interception…")
             }
             .font(Panel.Typography.bannerBody)
             .panelBlock(vertical: Panel.Metrics.footerVertical)
@@ -451,8 +450,7 @@ private struct FooterView: View {
                     Button("History…") { open("history") }
                         .buttonStyle(.link)
                 }
-                SettingsLink { Text("Settings…") }
-                    .buttonStyle(.link)
+                OpenSettingsButton(title: "Settings…")
                 Button("Quit") { NSApplication.shared.terminate(nil) }
                     .buttonStyle(.link)
             }
