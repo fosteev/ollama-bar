@@ -1,93 +1,82 @@
 import OllamaBarCore
 import SwiftUI
 
-/// What the model is producing right now, as seen through the proxy.
+/// The tail of what the model is producing, inside the panel.
 ///
-/// Reasoning is shown when there is no answer text yet — otherwise a thinking model looks frozen
-/// for the first thirty seconds of every request.
+/// Exactly two lines: enough to see movement, too little to invite reading. Anything longer
+/// belongs in the output window, which does not vanish when the panel loses focus.
 struct LiveOutputView: View {
     let exchange: ProxiedExchange
 
-    /// Enough to see the shape of what is coming out without rendering a novel every tick.
-    private static let visibleCharacters = 800
+    @Environment(\.openWindow) private var openWindow
+
+    private static let visibleCharacters = 220
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
-                Text(exchange.model ?? "unknown model")
-                    .fontWeight(.medium)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                Text(exchange.path)
-                    .foregroundStyle(.secondary)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 8))
+                    .foregroundStyle(.tertiary)
+                Text(isReasoning ? "Reasoning" : "Output")
                 Spacer()
-                if isThinking {
-                    Text("thinking")
-                        .foregroundStyle(.tertiary)
+                Button("Open window") {
+                    NSApplication.shared.activate(ignoringOtherApps: true)
+                    openWindow(id: "output")
                 }
+                .buttonStyle(.link)
+                .keyboardShortcut("o")
             }
-            .font(.caption)
+            .font(Panel.Typography.bannerBody)
+            .foregroundStyle(.secondary)
 
-            ScrollView {
-                Text(visibleText)
-                    .font(.system(.caption, design: .monospaced))
-                    .foregroundStyle(isThinking ? .secondary : .primary)
-                    .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 130)
+            Text(visibleText)
+                .font(Panel.Typography.body)
+                .italic(isReasoning)
+                .foregroundStyle(
+                    isReasoning
+                        ? AnyShapeStyle(.secondary)
+                        : AnyShapeStyle(Color.primary.opacity(0.78))
+                )
+                .lineSpacing(2)
+                .frame(maxWidth: .infinity, maxHeight: Panel.Metrics.outputTail, alignment: .bottomLeading)
+                .clipped()
 
             if !exchange.toolCalls.isEmpty {
-                Text("tools: " + exchange.toolCalls.joined(separator: ", "))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 5) {
+                    ForEach(collapsedToolCalls, id: \.self) { call in
+                        Text(call)
+                            .font(Panel.Typography.chip)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 3)
+                            .background(Panel.Palette.chipBackground, in: .rect(cornerRadius: 4))
+                            .foregroundStyle(.secondary)
+                    }
+                }
             }
         }
     }
 
-    private var isThinking: Bool {
+    private var isReasoning: Bool {
         exchange.output.isEmpty && !exchange.reasoning.isEmpty
     }
 
     private var visibleText: String {
-        let text = exchange.output.isEmpty ? exchange.reasoning : exchange.output
+        let text = isReasoning ? exchange.reasoning : exchange.output
         guard text.count > Self.visibleCharacters else { return text }
         return "…" + text.suffix(Self.visibleCharacters)
     }
-}
 
-/// A finished exchange, one line in the history.
-struct ExchangeRow: View {
-    let exchange: ProxiedExchange
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Text(Format.clock(exchange.startedAt))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-            Text(exchange.model ?? exchange.path)
-                .lineLimit(1)
-                .truncationMode(.middle)
-            Spacer()
-            if let failure = exchange.failure {
-                Text(failure)
-                    .foregroundStyle(.orange)
-                    .lineLimit(1)
+    /// Agents call the same tool repeatedly; `read_file ×3` says more than three identical chips.
+    private var collapsedToolCalls: [String] {
+        var counts: [(name: String, count: Int)] = []
+        for call in exchange.toolCalls {
+            if let index = counts.firstIndex(where: { $0.name == call }) {
+                counts[index].count += 1
             } else {
-                if let tokens = exchange.completionTokens {
-                    Text("\(tokens) tok")
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
-                // Wall-clock average, so it includes model loading and prompt evaluation and
-                // will read lower than the live figure from the log. "avg" keeps them apart.
-                if let rate = exchange.tokensPerSecond {
-                    Text("avg " + Format.rate(rate))
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
-                }
+                counts.append((call, 1))
             }
         }
-        .font(.caption)
+        return counts.suffix(3).map { $0.count > 1 ? "\($0.name) ×\($0.count)" : $0.name }
     }
 }

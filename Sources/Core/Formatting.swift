@@ -17,6 +17,37 @@ public enum Format {
         value >= 1024 ? "\(value / 1024)K" : "\(value)"
     }
 
+    /// Token counts that sit next to each other and must line up: `9.9K`, `312`, `1.4K`.
+    public static func tokensCompact(_ value: Int) -> String {
+        if value < 1000 { return "\(value)" }
+        let thousands = Double(value) / 1000
+        return thousands < 100
+            ? String(format: "%.1fK", thousands)
+            : String(format: "%.0fK", thousands)
+    }
+
+    /// Running time in the shape a stopwatch uses: `0:31`, `12:04`, `1:02:11`.
+    public static func elapsed(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds))
+        if total >= 3600 {
+            return String(format: "%d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
+        }
+        return String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// Coarse age for lines like `idle · 2m` and `last seen 3m ago`, where precision is noise.
+    public static func age(_ seconds: TimeInterval) -> String {
+        let total = max(0, Int(seconds))
+        if total < 60 { return "\(total)s" }
+        if total < 3600 { return "\(total / 60)m" }
+        return "\(total / 3600)h"
+    }
+
+    /// Phase durations shown side by side: `8.4 · 1.2 · 1.2`.
+    public static func phase(_ seconds: TimeInterval) -> String {
+        seconds <= 0 ? "—" : String(format: "%.1f", seconds)
+    }
+
     public static func rate(_ value: Double) -> String {
         String(format: "%.1f t/s", value)
     }

@@ -35,6 +35,7 @@ struct ProxyExchangeTests {
                 id: started.id,
                 promptTokens: 12,
                 completionTokens: 8,
+                timings: ExchangeTimings(load: 0, prompt: 0.4, generation: 1.6),
                 at: started.startedAt.addingTimeInterval(2)
             )
         )

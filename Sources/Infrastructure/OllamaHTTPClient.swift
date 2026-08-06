@@ -13,8 +13,9 @@ public enum OllamaAPIError: Error, LocalizedError {
     }
 }
 
-/// Talks to the local Ollama HTTP API. Read-only: `/api/ps` and `/api/tags`.
-public struct OllamaHTTPClient: ModelInventorySource {
+/// Talks to the local Ollama HTTP API — `/api/ps` and `/api/tags` to observe, and `keep_alive`
+/// on `/api/generate` to load or unload a model without generating anything.
+public struct OllamaHTTPClient: ModelInventorySource, ModelController {
     public static let defaultBaseURL = URL(string: "http://127.0.0.1:11434")!
 
     public let baseURL: URL
@@ -34,6 +35,30 @@ public struct OllamaHTTPClient: ModelInventorySource {
 
     public func installedModels() async throws -> [InstalledModel] {
         try Self.decodeInstalledModels(from: try await get("/api/tags"))
+    }
+
+    /// `keep_alive: 0` with an empty prompt evicts the model immediately and generates nothing.
+    public func unload(model: String) async throws {
+        try await setKeepAlive(0, for: model)
+    }
+
+    /// `-1` means "never expire" — the model stays until Ollama itself is stopped.
+    public func pin(model: String) async throws {
+        try await setKeepAlive(-1, for: model)
+    }
+
+    private func setKeepAlive(_ value: Int, for model: String) async throws {
+        var request = URLRequest(url: baseURL.appending(path: "/api/generate"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(
+            withJSONObject: ["model": model, "keep_alive": value]
+        )
+
+        let (_, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, http.statusCode != 200 {
+            throw OllamaAPIError.badStatus(http.statusCode)
+        }
     }
 
     private func get(_ path: String) async throws -> Data {

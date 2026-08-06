@@ -49,6 +49,13 @@ final class AppSettings {
     var upstreamHost: String { baseURL.host() ?? "127.0.0.1" }
     var upstreamPort: UInt16 { UInt16(baseURL.port ?? 11434) }
 
+    /// The panel header has no room for a scheme, and it never varies anyway.
+    var displayHost: String {
+        host
+            .replacingOccurrences(of: "http://", with: "")
+            .replacingOccurrences(of: "https://", with: "")
+    }
+
     func resetToDefaults() {
         host = OllamaHTTPClient.defaultBaseURL.absoluteString
         pollInterval = 2

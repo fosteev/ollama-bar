@@ -6,6 +6,7 @@ enum PayloadEvent: Equatable {
     case output(String, OutputKind)
     case toolCall(String)
     case usage(prompt: Int?, completion: Int?)
+    case timings(ExchangeTimings)
     case done
 }
 
@@ -129,10 +130,27 @@ struct PayloadParser {
                 .usage(prompt: object["prompt_eval_count"] as? Int, completion: object["eval_count"] as? Int)
             )
         }
+        if let timings = timings(in: object) {
+            events.append(.timings(timings))
+        }
         if object["done"] as? Bool == true {
             events.append(.done)
         }
         return events
+    }
+
+    /// Ollama reports durations in nanoseconds on the final chunk. `load_duration` is the number
+    /// nothing else surfaces: it is routinely larger than the generation it precedes.
+    private static func timings(in object: [String: Any]) -> ExchangeTimings? {
+        guard object["total_duration"] != nil || object["eval_duration"] != nil else { return nil }
+        let seconds = { (key: String) -> TimeInterval in
+            ((object[key] as? NSNumber)?.doubleValue ?? 0) / 1e9
+        }
+        return ExchangeTimings(
+            load: seconds("load_duration"),
+            prompt: seconds("prompt_eval_duration"),
+            generation: seconds("eval_duration")
+        )
     }
 
     private static func deltas(content: Any?, reasoning: Any?) -> [PayloadEvent] {

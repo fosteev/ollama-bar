@@ -241,7 +241,7 @@ private final class ProxyEventRecorder: @unchecked Sendable {
 
     var completions: [(prompt: Int?, completion: Int?)] {
         snapshot.compactMap {
-            if case .completed(_, let prompt, let completion, _) = $0 { (prompt, completion) } else { nil }
+            if case .completed(_, let prompt, let completion, _, _) = $0 { (prompt, completion) } else { nil }
         }
     }
 

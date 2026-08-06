@@ -164,7 +164,7 @@ private final class EventRecorder: @unchecked Sendable {
 
     var completions: [(prompt: Int?, completion: Int?)] {
         events.compactMap {
-            if case .completed(_, let prompt, let completion, _) = $0 { (prompt, completion) } else { nil }
+            if case .completed(_, let prompt, let completion, _, _) = $0 { (prompt, completion) } else { nil }
         }
     }
 
@@ -172,5 +172,74 @@ private final class EventRecorder: @unchecked Sendable {
         events.reduce(into: "") { result, event in
             if case .output(_, let delta, let eventKind) = event, eventKind == kind { result += delta }
         }
+    }
+}
+
+/// Added with the redesign: the panel names the client and the output window shows the prompt,
+/// so both have to survive the trip through the sniffer.
+struct RequestDetailTests {
+    @Test func clientAndPromptAreRecovered() {
+        let recorder = DetailRecorder()
+        let sniffer = ConnectionSniffer(emit: recorder.record)
+        let body = #"{"model":"m","messages":[{"role":"system","content":"be brief"},{"role":"user","content":"hi"}]}"#
+
+        sniffer.clientBytes(Data("""
+        POST /api/chat HTTP/1.1\r
+        Host: 127.0.0.1:11435\r
+        User-Agent: codex-cli/0.42 (macOS)\r
+        Content-Length: \(body.utf8.count)\r
+        \r
+        \(body)
+        """.utf8))
+
+        let exchange = recorder.started.first
+        #expect(exchange??.client == "codex-cli/0.42 (macOS)")
+        #expect(exchange??.prompt?.contains("system:") == true)
+        #expect(exchange??.prompt?.contains("be brief") == true)
+    }
+
+    @Test func timingBreakdownComesOffTheFinalChunk() {
+        let recorder = DetailRecorder()
+        let sniffer = ConnectionSniffer(emit: recorder.record)
+        let body = #"{"done":true,"total_duration":10857075542,"load_duration":8425290417,"prompt_eval_duration":1180582000,"eval_duration":1242550000}"#
+
+        sniffer.clientBytes(Data("GET /api/chat HTTP/1.1\r\nHost: x\r\n\r\n".utf8))
+        sniffer.serverBytes(Data("""
+        HTTP/1.1 200 OK\r
+        Content-Type: application/json\r
+        Content-Length: \(body.utf8.count)\r
+        \r
+        \(body)
+        """.utf8))
+
+        let timings = recorder.timings.first ?? nil
+        #expect(timings != nil)
+        #expect(abs((timings?.load ?? 0) - 8.425) < 0.01)
+        #expect(abs((timings?.prompt ?? 0) - 1.18) < 0.01)
+        #expect(abs((timings?.generation ?? 0) - 1.243) < 0.01)
+        #expect(timings?.dominantPhase?.name == "load")
+    }
+}
+
+private final class DetailRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storage: [ProxyEvent] = []
+
+    var record: @Sendable (ProxyEvent) -> Void {
+        { [self] event in
+            lock.lock()
+            storage.append(event)
+            lock.unlock()
+        }
+    }
+
+    private var events: [ProxyEvent] { lock.withLock { storage } }
+
+    var started: [ProxiedExchange?] {
+        events.compactMap { if case .started(let exchange) = $0 { exchange } else { nil } }
+    }
+
+    var timings: [ExchangeTimings?] {
+        events.compactMap { if case .completed(_, _, _, let timings, _) = $0 { timings } else { nil } }
     }
 }

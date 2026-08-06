@@ -10,11 +10,14 @@ public enum ConnectionState: Sendable, Equatable {
 public struct Throughput: Sendable, Equatable {
     public let tokensPerSecond: Double
     public let slotID: Int
+    /// Tokens produced so far in this decode — the log counts them for us.
+    public let tokensDecoded: Int
     public let updatedAt: Date
 
-    public init(tokensPerSecond: Double, slotID: Int, updatedAt: Date) {
+    public init(tokensPerSecond: Double, slotID: Int, tokensDecoded: Int = 0, updatedAt: Date) {
         self.tokensPerSecond = tokensPerSecond
         self.slotID = slotID
+        self.tokensDecoded = tokensDecoded
         self.updatedAt = updatedAt
     }
 }
@@ -51,8 +54,19 @@ public final class OllamaMonitor {
     public private(set) var throughput: Throughput?
     public private(set) var recentRequests: [RequestLogEntry] = []
     public private(set) var lastCheckpoint: ContextCheckpoint?
+    public private(set) var lastCheckpointAt: Date?
     /// Exchanges seen through the proxy, oldest first. Empty unless the proxy is running.
     public private(set) var exchanges: [ProxiedExchange] = []
+
+    /// When the server last answered, for the "last seen 3m ago" line while it is down.
+    public private(set) var lastSeenAt: Date?
+    /// When generation last stopped, for the "idle · 2m" line.
+    public private(set) var generationEndedAt: Date?
+    /// Timestamps of model loads seen in the last hour — repeated loads mean VRAM thrashing.
+    public private(set) var reloads: [Date] = []
+
+    private var residentNames: Set<String> = []
+    private var everResidentNames: Set<String> = []
 
     public init() {}
 
@@ -72,14 +86,79 @@ public final class OllamaMonitor {
         loaded.reduce(0) { $0 + $1.size }
     }
 
+    /// How full the context is right now, from the checkpoint lines the server writes while it
+    /// works. Stale checkpoints are ignored — an hour-old figure is worse than none.
+    public struct ContextFill: Sendable, Equatable {
+        public let used: Int
+        public let limit: Int
+        public var fraction: Double { limit > 0 ? min(1, Double(used) / Double(limit)) : 0 }
+    }
+
+    public func contextFill(now: Date = .now) -> ContextFill? {
+        guard let checkpoint = lastCheckpoint,
+              let at = lastCheckpointAt,
+              now.timeIntervalSince(at) < 300,
+              let limit = loaded.first?.contextLength,
+              limit > 0
+        else { return nil }
+        return ContextFill(used: checkpoint.tokens, limit: limit)
+    }
+
+    /// Ordered by severity, worst first. At most one is ever shown; the rest are counted.
+    public func warnings(now: Date = .now) -> [MonitorWarning] {
+        var result: [MonitorWarning] = []
+
+        if let failed = exchanges.last(where: { $0.isFailure }),
+           let at = failed.finishedAt,
+           now.timeIntervalSince(at) < 60 {
+            result.append(
+                .requestFailed(
+                    status: failed.status,
+                    path: failed.path,
+                    message: failed.failure ?? "request failed",
+                    client: failed.client,
+                    at: at
+                )
+            )
+        }
+
+        if let fill = contextFill(now: now), fill.fraction >= 0.9 {
+            result.append(.contextNearlyFull(used: fill.used, limit: fill.limit))
+        }
+
+        if reloads.count >= 3 {
+            let lost = exchanges
+                .compactMap { $0.timings?.load }
+                .filter { $0 > 0 }
+                .reduce(0, +)
+            result.append(.modelReloads(count: reloads.count, secondsLost: lost > 0 ? lost : nil))
+        }
+
+        return result.sorted { $0.severity > $1.severity }
+    }
+
     /// Loaded models change constantly — this is the hot path, polled on every tick.
-    public func refreshLoaded(using source: ModelInventorySource) async {
+    public func refreshLoaded(using source: ModelInventorySource, now: Date = .now) async {
         do {
-            loaded = try await source.loadedModels()
+            let models = try await source.loadedModels()
+            noteResidency(of: models, now: now)
+            loaded = models
             connection = .connected
+            lastSeenAt = now
         } catch {
             connection = .unreachable(error.localizedDescription)
         }
+    }
+
+    /// A model that goes away and comes back was reloaded — Ollama gives no event for this, but
+    /// each reload costs seconds of weight loading, and four in an hour is worth saying out loud.
+    private func noteResidency(of models: [LoadedModel], now: Date) {
+        let names = Set(models.map(\.name))
+        let returned = names.subtracting(residentNames).intersection(everResidentNames)
+        reloads.append(contentsOf: returned.map { _ in now })
+        reloads.removeAll { now.timeIntervalSince($0) > 3600 }
+        everResidentNames.formUnion(names)
+        residentNames = names
     }
 
     /// The disk inventory changes only when someone pulls or deletes a model. A failure here keeps
@@ -101,6 +180,7 @@ public final class OllamaMonitor {
             throughput = Throughput(
                 tokensPerSecond: timing.tokensPerSecond3s,
                 slotID: timing.slotID,
+                tokensDecoded: timing.tokensDecoded,
                 updatedAt: now
             )
         case .request(let entry):
@@ -110,6 +190,7 @@ public final class OllamaMonitor {
             }
         case .checkpoint(let checkpoint):
             lastCheckpoint = checkpoint
+            lastCheckpointAt = now
         }
     }
 
@@ -135,10 +216,11 @@ public final class OllamaMonitor {
         case .toolCall(let id, let name):
             update(id) { $0.toolCalls.append(name) }
 
-        case .completed(let id, let promptTokens, let completionTokens, let at):
+        case .completed(let id, let promptTokens, let completionTokens, let timings, let at):
             update(id) { exchange in
                 exchange.promptTokens = promptTokens ?? exchange.promptTokens
                 exchange.completionTokens = completionTokens ?? exchange.completionTokens
+                exchange.timings = timings ?? exchange.timings
                 exchange.finishedAt = at
             }
 
@@ -168,6 +250,7 @@ public final class OllamaMonitor {
         guard let throughput else { return }
         if now.timeIntervalSince(throughput.updatedAt) >= Self.generationTimeout {
             self.throughput = nil
+            generationEndedAt = throughput.updatedAt
         }
     }
 }

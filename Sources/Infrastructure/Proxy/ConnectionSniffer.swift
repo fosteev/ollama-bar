@@ -34,6 +34,7 @@ final class ConnectionSniffer: @unchecked Sendable {
                 request = RequestInProgress(
                     method: target.method,
                     path: target.path,
+                    client: head.value("User-Agent"),
                     framing: HTTPStreamParser.framing(for: head, isResponse: false)
                 )
             }
@@ -53,17 +54,42 @@ final class ConnectionSniffer: @unchecked Sendable {
         let exchange = ProxiedExchange(
             method: request.method,
             path: request.path,
-            model: Self.model(in: request.body)
+            model: Self.model(in: request.body),
+            client: request.client,
+            prompt: Self.prompt(in: request.body)
         )
         awaitingResponse.append(exchange)
         emit(.started(exchange))
     }
 
     private static func model(in body: Data) -> String? {
-        guard !body.isEmpty,
-              let object = try? JSONSerialization.jsonObject(with: body) as? [String: Any]
-        else { return nil }
-        return object["model"] as? String
+        json(in: body)?["model"] as? String
+    }
+
+    /// What the client actually sent. Agents bury a lot in the system message, and until you can
+    /// read it the context-overflow warning is just a number.
+    private static func prompt(in body: Data) -> String? {
+        guard let object = json(in: body) else { return nil }
+
+        if let messages = object["messages"] as? [[String: Any]] {
+            let text = messages.map { message in
+                let role = message["role"] as? String ?? "?"
+                let content = message["content"] as? String ?? ""
+                return "\(role):\n\(content)"
+            }.joined(separator: "\n\n")
+            return String(text.prefix(maxRecordedPrompt))
+        }
+        if let prompt = object["prompt"] as? String {
+            return String(prompt.prefix(maxRecordedPrompt))
+        }
+        return nil
+    }
+
+    private static let maxRecordedPrompt = 8000
+
+    private static func json(in body: Data) -> [String: Any]? {
+        guard !body.isEmpty else { return nil }
+        return try? JSONSerialization.jsonObject(with: body) as? [String: Any]
     }
 
     // MARK: - Server → client
@@ -125,14 +151,16 @@ final class ConnectionSniffer: @unchecked Sendable {
 private struct RequestInProgress {
     let method: String
     let path: String
+    let client: String?
     var framing: HTTPStreamParser.BodyFraming
     var body = Data()
     private var remaining: Int?
     private var chunked = ChunkedDecoder()
 
-    init(method: String, path: String, framing: HTTPStreamParser.BodyFraming) {
+    init(method: String, path: String, client: String?, framing: HTTPStreamParser.BodyFraming) {
         self.method = method
         self.path = path
+        self.client = client
         self.framing = framing
         if case .length(let length) = framing { remaining = length }
     }
@@ -183,6 +211,7 @@ private struct ResponseInProgress {
     private var chunked = ChunkedDecoder()
     private var promptTokens: Int?
     private var completionTokens: Int?
+    private var timings: ExchangeTimings?
 
     init(id: UUID, framing: HTTPStreamParser.BodyFraming, parser: PayloadParser) {
         self.id = id
@@ -231,6 +260,7 @@ private struct ResponseInProgress {
                 id: id,
                 promptTokens: promptTokens,
                 completionTokens: completionTokens,
+                timings: timings,
                 at: .now
             )
         )
@@ -246,6 +276,8 @@ private struct ResponseInProgress {
             case .usage(let prompt, let completion):
                 promptTokens = prompt ?? promptTokens
                 completionTokens = completion ?? completionTokens
+            case .timings(let value):
+                timings = value
             case .done:
                 break
             }

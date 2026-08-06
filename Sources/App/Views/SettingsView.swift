@@ -1,58 +1,92 @@
 import OllamaBarCore
 import SwiftUI
 
+/// Only what a user actually changes is on the surface: where Ollama is, and whether traffic is
+/// intercepted. Everything else has a working default and lives under Advanced. There is no Apply
+/// button — settings take effect when the field loses focus.
 struct SettingsView: View {
     @Bindable var settings: AppSettings
     private let onApply: () -> Void
+    private let reachable: () -> Bool
+
+    @State private var showAdvanced = false
 
     init(model: AppModel) {
         self.settings = model.settings
         self.onApply = model.restart
+        self.reachable = { if case .connected = model.monitor.connection { true } else { false } }
     }
 
     var body: some View {
         Form {
             Section {
-                TextField("Host", text: $settings.host)
-                    .onSubmit(onApply)
-                TextField("Log file", text: $settings.logPath)
-                    .onSubmit(onApply)
-            } footer: {
-                Text("Localhost only for now. The log gives throughput; without it the app still "
-                     + "reports loaded models.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            }
-
-            Section {
-                Stepper(value: $settings.pollInterval, in: 1...30) {
-                    Text("Refresh every \(settings.pollInterval)s")
+                LabeledContent("Ollama") {
+                    HStack(spacing: 8) {
+                        TextField("", text: $settings.host)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 12, design: .monospaced))
+                            .onSubmit(onApply)
+                        Circle()
+                            .fill(reachable() ? Color.green : Color.secondary.opacity(0.4))
+                            .frame(width: 7, height: 7)
+                            .help(reachable() ? "Responding" : "Not responding")
+                    }
                 }
-                .onChange(of: settings.pollInterval) { onApply() }
-            }
 
-            Section {
-                Toggle("Intercept requests", isOn: $settings.proxyEnabled)
-                    .onChange(of: settings.proxyEnabled) { onApply() }
-                TextField("Proxy port", value: $settings.proxyPort, format: .number.grouping(.never))
-                    .disabled(!settings.proxyEnabled)
-                    .onSubmit(onApply)
+                LabeledContent("Interception") {
+                    HStack(spacing: 10) {
+                        Toggle("", isOn: $settings.proxyEnabled)
+                            .labelsHidden()
+                            .onChange(of: settings.proxyEnabled) { onApply() }
+                        if settings.proxyEnabled {
+                            TextField("", value: $settings.proxyPort, format: .number.grouping(.never))
+                                .textFieldStyle(.roundedBorder)
+                                .font(.system(size: 12, design: .monospaced))
+                                .frame(width: 70)
+                                .onSubmit(onApply)
+                            Text("point your agent here")
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             } footer: {
-                Text("Point clients at this port instead of Ollama's to see what they send and "
-                     + "what comes back. Traffic is relayed byte for byte.")
-                .font(.caption)
+                Text("Without interception the app shows models, memory and speed. Interception "
+                     + "adds the prompt, live output and reasoning.")
+                .font(.system(size: 11))
                 .foregroundStyle(.secondary)
             }
 
             Section {
-                HStack {
+                DisclosureGroup(isExpanded: $showAdvanced) {
+                    LabeledContent("Log file") {
+                        TextField("", text: $settings.logPath)
+                            .textFieldStyle(.roundedBorder)
+                            .font(.system(size: 11, design: .monospaced))
+                            .onSubmit(onApply)
+                    }
+                    LabeledContent("Refresh") {
+                        Stepper(
+                            "every \(settings.pollInterval)s",
+                            value: $settings.pollInterval,
+                            in: 1...30
+                        )
+                        .onChange(of: settings.pollInterval) { onApply() }
+                    }
                     Button("Restore defaults") {
                         settings.resetToDefaults()
                         onApply()
                     }
-                    Spacer()
-                    Button("Apply", action: onApply)
-                        .keyboardShortcut(.defaultAction)
+                } label: {
+                    HStack {
+                        Text("Advanced")
+                        Spacer()
+                        if !showAdvanced {
+                            Text("log path · poll \(settings.pollInterval)s")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
                 }
             }
         }

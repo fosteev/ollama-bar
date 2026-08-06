@@ -1,6 +1,7 @@
 import Foundation
 import OllamaBarCore
 import OllamaBarInfrastructure
+import SwiftUI
 
 /// Owns the monitor, the driver that feeds it and the optional proxy, and rebuilds them when the
 /// settings they depend on change. Views read `monitor` directly — there is no ViewModel layer.
@@ -10,8 +11,13 @@ final class AppModel {
     let monitor = OllamaMonitor()
     let settings: AppSettings
 
+    /// Disclosure state for the last-request row. Remembered across openings, per the design.
+    var lastRequestExpanded = false
+
     private var driver: MonitorDriver?
     private var proxy: ProxyServer?
+    private var controller: ModelController?
+    private var acknowledgedAlert: String?
 
     init(settings: AppSettings = AppSettings()) {
         self.settings = settings
@@ -27,13 +33,16 @@ final class AppModel {
         driver?.stop()
         proxy?.stop()
 
+        let client = OllamaHTTPClient(baseURL: settings.baseURL)
+        controller = client
+
         let proxy = makeProxy()
         proxy?.start()
         self.proxy = proxy
 
         let driver = MonitorDriver(
             monitor: monitor,
-            inventory: OllamaHTTPClient(baseURL: settings.baseURL),
+            inventory: client,
             events: ServerLogTailer(url: settings.logURL),
             proxy: proxy,
             pollInterval: .seconds(settings.pollInterval)
@@ -59,5 +68,95 @@ final class AppModel {
             upstreamHost: settings.upstreamHost,
             upstreamPort: settings.upstreamPort
         )
+    }
+
+    // MARK: - Actions
+
+    func unload(_ model: String) {
+        guard let controller else { return }
+        Task { try? await controller.unload(model: model) }
+    }
+
+    func pin(_ model: String) {
+        guard let controller else { return }
+        Task { try? await controller.pin(model: model) }
+    }
+
+    // MARK: - Alerts
+
+    /// Level the menu bar icon should be tinted with. Clears once the panel has been opened —
+    /// at that point the warning has been delivered and colour would just be decoration.
+    enum AlertLevel {
+        case none
+        case warning
+        case error
+    }
+
+    func alertLevel(now: Date = .now) -> AlertLevel {
+        guard let warning = monitor.warnings(now: now).first, warning.id != acknowledgedAlert else {
+            return .none
+        }
+        return warning.isError ? .error : .warning
+    }
+
+    func acknowledgeAlerts(now: Date = .now) {
+        acknowledgedAlert = monitor.warnings(now: now).first?.id
+    }
+
+    // MARK: - Activity
+
+    /// What the activity block shows. Nil means idle, and idle collapses to a single line.
+    struct Activity {
+        let label: String
+        let headline: String
+        let tint: Color
+        let meta: [String]
+        let contextFill: OllamaMonitor.ContextFill?
+    }
+
+    func activity(now: Date = .now) -> Activity? {
+        let fill = monitor.contextFill(now: now)
+        let active = monitor.activeExchange
+
+        // A reasoning model produces nothing but thinking for tens of seconds. Showing speed there
+        // answers the wrong question — what the user wants is "how long has it been at this?".
+        if let active, active.output.isEmpty, !active.reasoning.isEmpty {
+            return Activity(
+                label: "Thinking",
+                headline: Format.elapsed(now.timeIntervalSince(active.startedAt)),
+                tint: Panel.Palette.reasoning,
+                meta: meta(active: active, includeRate: true),
+                contextFill: fill
+            )
+        }
+
+        guard let throughput = monitor.throughput else { return nil }
+        return Activity(
+            label: "Generating",
+            headline: Format.rate(throughput.tokensPerSecond),
+            tint: Panel.Palette.generating,
+            meta: meta(active: active, includeRate: false),
+            contextFill: fill
+        )
+    }
+
+    private func meta(active: ProxiedExchange?, includeRate: Bool) -> [String] {
+        var items: [String] = []
+        if let slot = monitor.throughput?.slotID { items.append("slot \(slot)") }
+        if let client = active?.client.map(Self.shortClient) { items.append(client) }
+        if includeRate, let rate = monitor.throughput?.tokensPerSecond {
+            items.append(Format.rate(rate))
+        } else if let started = active?.startedAt {
+            items.append(Format.elapsed(Date.now.timeIntervalSince(started)))
+        }
+        if let tokens = monitor.throughput?.tokensDecoded, tokens > 0 {
+            items.append("\(tokens) tok")
+        }
+        return items
+    }
+
+    /// User-Agents run long; the product and version are the identifying part.
+    private static func shortClient(_ userAgent: String) -> String {
+        userAgent.split(separator: " ").first.map(String.init) ?? userAgent
     }
 }
