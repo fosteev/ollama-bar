@@ -2,12 +2,25 @@
 
 A macOS menu bar app that shows what your local Ollama server is actually doing — which models are loaded, what they cost in memory, how fast they are generating, and what they are producing right now.
 
-Status: the headless core and its CLI are working (M1). The menu bar app is next.
+Status: the menu bar app and the headless CLI both work (M1 + M2). Request interception, which is
+what makes live output possible, is still to come.
 
-## Try it
+## The app
 
 ```bash
-swift build
+brew install tuist
+tuist generate
+open OllamaBar.xcworkspace   # then Cmd+R
+```
+
+It appears in the menu bar with no Dock icon. The label stays quiet — an icon, plus a dot when a
+model is resident — and only shows a number while something is generating.
+
+## The CLI
+
+Same core, no Xcode required:
+
+```bash
 swift run ollama-bar-cli          # live view, refreshes every 2s
 swift run ollama-bar-cli --once   # one snapshot
 ```
@@ -30,8 +43,11 @@ Needs a local Ollama; nothing has to be reconfigured on the client side.
 swift test
 ```
 
-`Sources/Core` holds the domain and the monitor, `Sources/Infrastructure` the HTTP client and the
-`server.log` tailer, `Sources/CLI` the terminal front end. Parsers are tested against samples
-recorded from a live server in `Fixtures/`.
+`Sources/Core` holds the domain and the monitor, `Sources/Infrastructure` the HTTP client, the
+`server.log` tailer and settings storage, `Sources/App` the SwiftUI menu bar app, `Sources/CLI` the
+terminal front end. Parsers are tested against samples recorded from a live server in `Fixtures/`.
+
+The logic builds as a plain SPM package, so `swift test` runs without generating an Xcode project;
+Tuist exists only for the `.app` bundle. Both read the same source directories.
 
 See [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
