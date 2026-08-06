@@ -30,6 +30,7 @@ final class AppModel {
     }
 
     func start() {
+        applyAppearance()
         driver?.stop()
         proxy?.stop()
 
@@ -68,6 +69,11 @@ final class AppModel {
             upstreamHost: settings.upstreamHost,
             upstreamPort: settings.upstreamPort
         )
+    }
+
+    /// `nil` hands the app back to the system setting.
+    func applyAppearance() {
+        NSApplication.shared.appearance = settings.appearance.nsAppearance
     }
 
     // MARK: - Actions

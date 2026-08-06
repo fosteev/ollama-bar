@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settings: AppSettings
     private let onApply: () -> Void
+    private let onAppearanceChange: () -> Void
     private let reachable: () -> Bool
 
     @State private var showAdvanced = false
@@ -14,6 +15,7 @@ struct SettingsView: View {
     init(model: AppModel) {
         self.settings = model.settings
         self.onApply = model.restart
+        self.onAppearanceChange = model.applyAppearance
         self.reachable = { if case .connected = model.monitor.connection { true } else { false } }
     }
 
@@ -50,6 +52,11 @@ struct SettingsView: View {
                         }
                     }
                 }
+                Picker("Appearance", selection: $settings.appearance) {
+                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.segmented)
+                .onChange(of: settings.appearance) { onAppearanceChange() }
             } footer: {
                 Text("Without interception the app shows models, memory and speed. Interception "
                      + "adds the prompt, live output and reasoning.")

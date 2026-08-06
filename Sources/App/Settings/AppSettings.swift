@@ -1,6 +1,34 @@
+import AppKit
 import Foundation
 import OllamaBarCore
 import OllamaBarInfrastructure
+
+/// Appearance override. "System" is the default and the right answer for most people; the other
+/// two exist because a menu bar panel is often the only bright thing on a dark screen, or the
+/// reverse, and following the system is not always what you want for one small window.
+enum AppAppearance: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: "System"
+        case .light: "Light"
+        case .dark: "Dark"
+        }
+    }
+
+    var nsAppearance: NSAppearance? {
+        switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
+}
 
 /// Observable facade over the JSON settings file. Writes through on every change.
 @MainActor
@@ -29,6 +57,10 @@ final class AppSettings {
         didSet { store.set(proxyPort, for: "proxy.port") }
     }
 
+    var appearance: AppAppearance {
+        didSet { store.set(appearance.rawValue, for: "app.appearance") }
+    }
+
     init(store: JSONSettingsStore = JSONSettingsStore()) {
         self.store = store
         self.host = store.string("ollama.host") ?? OllamaHTTPClient.defaultBaseURL.absoluteString
@@ -36,6 +68,8 @@ final class AppSettings {
         self.logPath = store.string("ollama.logPath") ?? ServerLogTailer.defaultURL.path
         self.proxyEnabled = store.bool("proxy.enabled") ?? false
         self.proxyPort = store.int("proxy.port") ?? 11435
+        self.appearance = store.string("app.appearance")
+            .flatMap(AppAppearance.init(rawValue:)) ?? .system
     }
 
     var baseURL: URL {
@@ -62,5 +96,6 @@ final class AppSettings {
         logPath = ServerLogTailer.defaultURL.path
         proxyEnabled = false
         proxyPort = 11435
+        appearance = .system
     }
 }
