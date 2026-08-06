@@ -40,14 +40,26 @@ public final class OllamaMonitor {
     /// How many access-log entries to keep in memory.
     public static let requestHistoryLimit = 200
 
+    /// How many proxied exchanges to keep, and how much text to retain per exchange. Completions
+    /// can be enormous and several slots can run at once, so this is bounded from the start.
+    public static let exchangeHistoryLimit = 50
+    public static let outputLimit = 32 * 1024
+
     public private(set) var connection: ConnectionState = .unknown
     public private(set) var loaded: [LoadedModel] = []
     public private(set) var installed: [InstalledModel] = []
     public private(set) var throughput: Throughput?
     public private(set) var recentRequests: [RequestLogEntry] = []
     public private(set) var lastCheckpoint: ContextCheckpoint?
+    /// Exchanges seen through the proxy, oldest first. Empty unless the proxy is running.
+    public private(set) var exchanges: [ProxiedExchange] = []
 
     public init() {}
+
+    /// The exchange whose output is worth showing right now.
+    public var activeExchange: ProxiedExchange? {
+        exchanges.last { $0.isActive && $0.status != nil }
+    }
 
     public var menuBarState: MenuBarState {
         if case .unreachable = connection { return .unreachable }
@@ -99,6 +111,56 @@ public final class OllamaMonitor {
         case .checkpoint(let checkpoint):
             lastCheckpoint = checkpoint
         }
+    }
+
+    public func apply(_ event: ProxyEvent) {
+        switch event {
+        case .started(let exchange):
+            exchanges.append(exchange)
+            if exchanges.count > Self.exchangeHistoryLimit {
+                exchanges.removeFirst(exchanges.count - Self.exchangeHistoryLimit)
+            }
+
+        case .responded(let id, let status):
+            update(id) { $0.status = status }
+
+        case .output(let id, let delta, let kind):
+            update(id) { exchange in
+                switch kind {
+                case .content: Self.append(delta, to: &exchange.output, truncated: &exchange.outputTruncated)
+                case .reasoning: Self.append(delta, to: &exchange.reasoning, truncated: &exchange.outputTruncated)
+                }
+            }
+
+        case .toolCall(let id, let name):
+            update(id) { $0.toolCalls.append(name) }
+
+        case .completed(let id, let promptTokens, let completionTokens, let at):
+            update(id) { exchange in
+                exchange.promptTokens = promptTokens ?? exchange.promptTokens
+                exchange.completionTokens = completionTokens ?? exchange.completionTokens
+                exchange.finishedAt = at
+            }
+
+        case .failed(let id, let reason, let at):
+            update(id) { exchange in
+                exchange.failure = reason
+                exchange.finishedAt = at
+            }
+        }
+    }
+
+    private func update(_ id: UUID, _ body: (inout ProxiedExchange) -> Void) {
+        guard let index = exchanges.lastIndex(where: { $0.id == id }) else { return }
+        body(&exchanges[index])
+    }
+
+    private static func append(_ delta: String, to text: inout String, truncated: inout Bool) {
+        guard text.utf8.count < outputLimit else {
+            truncated = true
+            return
+        }
+        text += delta
     }
 
     /// Drops the throughput reading once the log has been quiet for `generationTimeout`.

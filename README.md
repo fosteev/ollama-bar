@@ -2,8 +2,7 @@
 
 A macOS menu bar app that shows what your local Ollama server is actually doing — which models are loaded, what they cost in memory, how fast they are generating, and what they are producing right now.
 
-Status: the menu bar app and the headless CLI both work (M1 + M2). Request interception, which is
-what makes live output possible, is still to come.
+Status: menu bar app, headless CLI and request interception all work (M1–M3).
 
 ## The app
 
@@ -21,9 +20,21 @@ model is resident — and only shows a number while something is generating.
 Same core, no Xcode required:
 
 ```bash
-swift run ollama-bar-cli          # live view, refreshes every 2s
-swift run ollama-bar-cli --once   # one snapshot
+swift run ollama-bar-cli                # live view, refreshes every 2s
+swift run ollama-bar-cli --once         # one snapshot
+swift run ollama-bar-cli --proxy 11435  # and watch what passes through
 ```
+
+## Seeing output
+
+Ollama offers no way to watch another client's stream, and its log carries metadata only. To see
+what a model is actually producing, turn on interception (Settings, or `--proxy` on the CLI) and
+point your client at that port instead of Ollama's.
+
+The proxy is a byte-for-byte TCP relay: it never parses or re-encodes what it forwards. HTTP is
+reconstructed from a copy of the stream purely for display, so a bug there costs you visibility and
+nothing else. Transparency is checked by tests that compare a proxied response against the same
+request made directly.
 
 ```
 ollama-bar  http://127.0.0.1:11434

@@ -21,22 +21,36 @@ struct OllamaBarCLI {
             return
         }
 
+        let proxy = options.proxyPort.flatMap(UInt16.init(exactly:)).map {
+            ProxyServer(
+                listenPort: $0,
+                upstreamHost: options.baseURL.host() ?? "127.0.0.1",
+                upstreamPort: UInt16(options.baseURL.port ?? 11434)
+            )
+        }
+        proxy?.start()
+
         let driver = MonitorDriver(
             monitor: monitor,
             inventory: client,
             events: ServerLogTailer(url: options.logURL),
+            proxy: proxy,
             pollInterval: .seconds(options.interval)
         )
         driver.start()
 
         while true {
-            render(monitor, options: options)
+            render(monitor, options: options, proxy: proxy)
             try await Task.sleep(for: .seconds(options.interval))
         }
     }
 
     @MainActor
-    private static func render(_ monitor: OllamaMonitor, options: Options) {
+    private static func render(
+        _ monitor: OllamaMonitor,
+        options: Options,
+        proxy: ProxyServer? = nil
+    ) {
         var out = ""
         if options.isTTY { out += "\u{1B}[2J\u{1B}[H" }
 
@@ -72,6 +86,10 @@ struct OllamaBarCLI {
 
         out += "menu bar: \(describe(monitor.menuBarState))\n"
 
+        if let proxy {
+            out += "\n" + describe(proxy.state, monitor: monitor)
+        }
+
         let requests = monitor.recentRequests.filter { !$0.isInventoryPoll }.suffix(5)
         if !requests.isEmpty {
             out += "\nrecent requests:\n"
@@ -97,6 +115,31 @@ struct OllamaBarCLI {
         """
     }
 
+    @MainActor
+    private static func describe(_ state: ProxyServer.State, monitor: OllamaMonitor) -> String {
+        switch state {
+        case .stopped:
+            return "proxy: stopped\n"
+        case .failed(let reason):
+            return "proxy: failed — \(reason)\n"
+        case .running(let port):
+            var out = "proxy: :\(port) → \(monitor.exchanges.count) exchanges\n"
+            if let active = monitor.activeExchange {
+                let text = active.output.isEmpty ? active.reasoning : active.output
+                let label = active.output.isEmpty ? "thinking" : "output"
+                out += "  \(active.model ?? "?") \(active.path)\n"
+                out += "  \(label): \(String(text.suffix(200)))\n"
+            }
+            for exchange in monitor.exchanges.suffix(3).reversed() where !exchange.isActive {
+                let tokens = exchange.completionTokens.map { "\($0) tok" } ?? "—"
+                let rate = exchange.tokensPerSecond.map { "avg " + Format.rate($0) } ?? "—"
+                out += "  \(Format.clock(exchange.startedAt))  \(exchange.model ?? exchange.path)  "
+                out += "\(tokens)  \(rate)\n"
+            }
+            return out
+        }
+    }
+
     private static func describe(_ state: MenuBarState) -> String {
         switch state {
         case .unreachable: "(dimmed icon)"
@@ -110,16 +153,18 @@ private struct Options {
     var baseURL = OllamaHTTPClient.defaultBaseURL
     var logURL = ServerLogTailer.defaultURL
     var interval = 2
+    var proxyPort: Int?
     var once = false
     var showHelp = false
     let isTTY = isatty(FileHandle.standardOutput.fileDescriptor) == 1
 
     static let usage = """
-    usage: ollama-bar-cli [--host URL] [--log PATH] [--interval SECONDS] [--once]
+    usage: ollama-bar-cli [--host URL] [--log PATH] [--interval SECONDS] [--proxy PORT] [--once]
 
       --host      Ollama base URL (default \(OllamaHTTPClient.defaultBaseURL))
       --log       server.log path (default \(ServerLogTailer.defaultURL.path))
       --interval  refresh interval in seconds (default 2)
+      --proxy     relay this port to Ollama and report what passes through
       --once      print one inventory snapshot and exit (no log tailing)
     """
 
@@ -134,6 +179,10 @@ private struct Options {
             case "--interval":
                 if let value = iterator.next(), let seconds = Int(value), seconds > 0 {
                     interval = seconds
+                }
+            case "--proxy":
+                if let value = iterator.next(), let port = Int(value), port > 0 {
+                    proxyPort = port
                 }
             case "--once":
                 once = true

@@ -7,6 +7,7 @@ public final class MonitorDriver {
     private let monitor: OllamaMonitor
     private let inventory: ModelInventorySource
     private let events: LogEventSource
+    private let proxy: ProxyEventSource?
     private let pollInterval: Duration
     private let installedPollInterval: Duration
     private let expiryTick: Duration
@@ -16,6 +17,7 @@ public final class MonitorDriver {
         monitor: OllamaMonitor,
         inventory: ModelInventorySource,
         events: LogEventSource,
+        proxy: ProxyEventSource? = nil,
         pollInterval: Duration = .seconds(2),
         installedPollInterval: Duration = .seconds(30),
         expiryTick: Duration = .milliseconds(500)
@@ -23,6 +25,7 @@ public final class MonitorDriver {
         self.monitor = monitor
         self.inventory = inventory
         self.events = events
+        self.proxy = proxy
         self.pollInterval = pollInterval
         self.installedPollInterval = installedPollInterval
         self.expiryTick = expiryTick
@@ -55,6 +58,15 @@ public final class MonitorDriver {
                 monitor.apply(event)
             }
         })
+
+        if let proxy {
+            tasks.append(Task { [monitor, proxy] in
+                for await event in proxy.events() {
+                    if Task.isCancelled { return }
+                    monitor.apply(event)
+                }
+            })
+        }
 
         tasks.append(Task { [monitor, expiryTick] in
             while !Task.isCancelled {

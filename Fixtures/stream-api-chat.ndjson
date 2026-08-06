@@ -1,0 +1,7 @@
+{"model":"qwen3.5-27b-32k:latest","created_at":"2026-08-06T10:01:25.065142Z","message":{"role":"assistant","content":"","thinking":"Thinking"},"done":false}
+{"model":"qwen3.5-27b-32k:latest","created_at":"2026-08-06T10:01:25.205101Z","message":{"role":"assistant","content":"","thinking":" Process"},"done":false}
+{"model":"qwen3.5-27b-32k:latest","created_at":"2026-08-06T10:01:25.415511Z","message":{"role":"assistant","content":"","thinking":":"},"done":false}
+{"model":"qwen3.5-27b-32k:latest","created_at":"2026-08-06T10:01:25.809114Z","message":{"role":"assistant","content":"","thinking":"\n\n1"},"done":false}
+{"model":"qwen3.5-27b-32k:latest","created_at":"2026-08-06T10:01:26.051935Z","message":{"role":"assistant","content":"","thinking":"."},"done":false}
+{"model":"qwen3.5-27b-32k:latest","created_at":"2026-08-06T10:01:26.454795Z","message":{"role":"assistant","content":"","thinking":"  **"},"done":false}
+{"model":"qwen3.5-27b-32k:latest","created_at":"2026-08-06T10:01:26.455584Z","message":{"role":"assistant","content":""},"done":true,"done_reason":"length","total_duration":11189174416,"load_duration":8247486000,"prompt_eval_count":12,"prompt_eval_duration":1540110000,"eval_count":8,"eval_duration":1396612000}

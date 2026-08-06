@@ -19,6 +19,7 @@ struct StatusPanel: View {
             case .connected:
                 inventory
                 throughput
+                proxySection
                 requests
             }
 
@@ -86,6 +87,52 @@ struct StatusPanel: View {
             }
         }
         .font(.callout)
+    }
+
+    /// Output is only observable through the proxy, so this section doubles as its status line.
+    @ViewBuilder
+    private var proxySection: some View {
+        Divider()
+        // The proxy reports its state through a lock rather than through observation; a one second
+        // tick is enough to keep this honest without polling anything expensive.
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            switch model.proxyState {
+            case .stopped:
+                HStack {
+                    Text("Interception off")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    SettingsLink { Text("Enable…") }
+                        .buttonStyle(.link)
+                }
+                .font(.caption)
+
+            case .failed(let reason):
+                Label("Proxy failed: \(reason)", systemImage: "exclamationmark.triangle")
+                    .font(.caption)
+                    .foregroundStyle(.orange)
+
+            case .running(let port):
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text("Intercepting on :\(String(port))")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("\(model.monitor.exchanges.count) seen")
+                            .foregroundStyle(.tertiary)
+                    }
+                    .font(.caption)
+
+                    if let active = model.monitor.activeExchange {
+                        LiveOutputView(exchange: active)
+                    } else {
+                        ForEach(model.monitor.exchanges.suffix(3).reversed()) { exchange in
+                            ExchangeRow(exchange: exchange)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     @ViewBuilder

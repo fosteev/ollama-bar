@@ -32,6 +32,19 @@ struct SettingsView: View {
             }
 
             Section {
+                Toggle("Intercept requests", isOn: $settings.proxyEnabled)
+                    .onChange(of: settings.proxyEnabled) { onApply() }
+                TextField("Proxy port", value: $settings.proxyPort, format: .number.grouping(.never))
+                    .disabled(!settings.proxyEnabled)
+                    .onSubmit(onApply)
+            } footer: {
+                Text("Point clients at this port instead of Ollama's to see what they send and "
+                     + "what comes back. Traffic is relayed byte for byte.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section {
                 HStack {
                     Button("Restore defaults") {
                         settings.resetToDefaults()
