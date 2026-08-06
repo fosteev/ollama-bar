@@ -1,0 +1,44 @@
+slot print_timing: id  0 | task 8829 |       total time =   35818.70 ms /   482 tokens
+slot print_timing: id  0 | task 8829 |    graphs reused =       8809
+[GIN] 2026/08/06 - 12:31:20 | 200 | 36.154889542s |       127.0.0.1 | POST     "/v1/responses"
+slot launch_slot_: id  0 | task -1 | sampler chain: logits -> penalties -> ?dry -> ?top-n-sigma -> top-k -> ?typical -> top-p -> ?min-p -> ?xtc -> ?temp-ext -> dist 
+slot launch_slot_: id  0 | task -1 | sampler params: 
+slot launch_slot_: id  0 | task 8985 | processing task, is_child = 0
+slot create_check: id  0 | task 8985 | erasing context checkpoint too close to an earlier one (pos_min = 27815, pos_max = 27815, n_tokens = 27816, size = 149.626 MiB)
+slot create_check: id  0 | task 8985 | created context checkpoint 4 of 32 (pos_min = 28484, pos_max = 28484, n_tokens = 28485, size = 149.626 MiB)
+slot print_timing: id  0 | task 8985 | prompt processing, n_tokens =    696, progress = 1.00, t =   4.01 s / 173.57 tokens per second
+slot create_check: id  0 | task 8985 | created context checkpoint 5 of 32 (pos_min = 28992, pos_max = 28992, n_tokens = 28993, size = 149.626 MiB)
+[GIN] 2026/08/06 - 12:31:39 | 200 |    1.001083ms |       127.0.0.1 | GET      "/api/tags"
+slot print_timing: id  0 | task 8985 | n_decoded =    100, tg =   5.45 t/s, tg_3s =   5.45 t/s
+[GIN] 2026/08/06 - 12:31:58 | 200 |    2.019542ms |       127.0.0.1 | GET      "/v1/models?client_version=0.145.0"
+slot print_timing: id  0 | task 8985 | n_decoded =    116, tg =   5.42 t/s, tg_3s =   5.29 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    132, tg =   5.39 t/s, tg_3s =   5.12 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    148, tg =   5.35 t/s, tg_3s =   5.07 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    165, tg =   5.36 t/s, tg_3s =   5.46 t/s
+[GIN] 2026/08/06 - 12:32:09 | 200 |     528.834µs |       127.0.0.1 | GET      "/api/tags"
+slot print_timing: id  0 | task 8985 | n_decoded =    182, tg =   5.38 t/s, tg_3s =   5.61 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    199, tg =   5.38 t/s, tg_3s =   5.29 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    217, tg =   5.41 t/s, tg_3s =   5.77 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    234, tg =   5.42 t/s, tg_3s =   5.66 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    251, tg =   5.43 t/s, tg_3s =   5.50 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    268, tg =   5.44 t/s, tg_3s =   5.61 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    285, tg =   5.44 t/s, tg_3s =   5.36 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    301, tg =   5.42 t/s, tg_3s =   5.11 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    318, tg =   5.42 t/s, tg_3s =   5.43 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    334, tg =   5.41 t/s, tg_3s =   5.22 t/s
+[GIN] 2026/08/06 - 12:32:40 | 200 |      651.25µs |       127.0.0.1 | GET      "/api/tags"
+slot print_timing: id  0 | task 8985 | n_decoded =    350, tg =   5.40 t/s, tg_3s =   5.28 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    367, tg =   5.40 t/s, tg_3s =   5.42 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    384, tg =   5.41 t/s, tg_3s =   5.51 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    401, tg =   5.42 t/s, tg_3s =   5.66 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    417, tg =   5.40 t/s, tg_3s =   5.03 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    433, tg =   5.39 t/s, tg_3s =   5.11 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    450, tg =   5.39 t/s, tg_3s =   5.36 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    467, tg =   5.39 t/s, tg_3s =   5.29 t/s
+slot print_timing: id  0 | task 8985 | n_decoded =    483, tg =   5.37 t/s, tg_3s =   4.97 t/s
+[GIN] 2026/08/06 - 12:33:08 | 200 |      60.333µs |       127.0.0.1 | GET      "/api/ps"
+[GIN] 2026/08/06 - 12:33:08 | 200 |     760.084µs |       127.0.0.1 | GET      "/api/tags"
+slot init_sampler: id  0 | task 8829 | init sampler, took 3.44 ms, tokens: text = 28144, total = 28144
+slot get_availabl: id  0 | task -1 |  - checking sim = 0.976 (28297/28997) > 0.100
+slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, f_sim_best = 0.976 (> 0.100 thold), f_keep = 1.000
+slot init_sampler: id  0 | task 8985 | init sampler, took 3.49 ms, tokens: text = 28997, total = 28997

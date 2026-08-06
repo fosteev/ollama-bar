@@ -1,0 +1,23 @@
+{
+    "models": [
+        {
+            "name": "qwen3.5-27b-32k:latest",
+            "model": "qwen3.5-27b-32k:latest",
+            "size": 18256861592,
+            "digest": "eeeca604a4aa3c8d0554c24fe4b8909a8dc69dc76e1044b2d8c88c37750cdffe",
+            "details": {
+                "parent_model": "",
+                "format": "gguf",
+                "family": "qwen35",
+                "families": [
+                    "qwen35"
+                ],
+                "parameter_size": "27.8B",
+                "quantization_level": "Q4_K_M"
+            },
+            "expires_at": "2026-08-06T12:36:20.846208+03:00",
+            "size_vram": 18256861592,
+            "context_length": 32768
+        }
+    ]
+}
