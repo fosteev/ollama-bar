@@ -37,8 +37,12 @@ public enum MenuBarState: Sendable, Equatable {
 @Observable
 public final class OllamaMonitor {
     /// How long after the last `print_timing` line generation is considered finished.
-    /// Ollama never logs "generation ended", so silence is the only available signal.
-    public static let generationTimeout: TimeInterval = 2
+    ///
+    /// Measured against a live server: llama.cpp emits these lines every 3.0 s almost exactly.
+    /// A timeout shorter than that makes the reading blink out between every pair of lines, which
+    /// is what a 2 s timeout did. Five seconds clears the cadence with margin; the access log
+    /// below usually ends the reading sooner anyway.
+    public static let generationTimeout: TimeInterval = 5
 
     /// How many access-log entries to keep in memory.
     public static let requestHistoryLimit = 200
@@ -177,13 +181,22 @@ public final class OllamaMonitor {
     public func apply(_ event: LogEvent, now: Date = .now) {
         switch event {
         case .timing(let timing):
+            // `tg` is the average over the whole decode and barely moves (29.7–30.2 t/s across a
+            // real run); `tg_3s` covers a three-second window and swings by a quarter between
+            // samples. The steady one is the readable one.
             throughput = Throughput(
-                tokensPerSecond: timing.tokensPerSecond3s,
+                tokensPerSecond: timing.tokensPerSecond,
                 slotID: timing.slotID,
                 tokensDecoded: timing.tokensDecoded,
                 updatedAt: now
             )
         case .request(let entry):
+            // The access-log line is written when the handler returns, so a finished generation
+            // request is a definite end — better than waiting out the timeout.
+            if entry.isGeneration, throughput != nil {
+                generationEndedAt = now
+                throughput = nil
+            }
             recentRequests.append(entry)
             if recentRequests.count > Self.requestHistoryLimit {
                 recentRequests.removeFirst(recentRequests.count - Self.requestHistoryLimit)

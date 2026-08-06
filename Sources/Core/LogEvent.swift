@@ -46,6 +46,17 @@ public struct RequestLogEntry: Sendable, Equatable, Identifiable {
 
     public var id: String { "\(timestamp.timeIntervalSince1970)-\(method)-\(path)" }
 
+    /// Endpoints that produce tokens. Their completion means generation has stopped.
+    public var isGeneration: Bool {
+        [
+            "/api/chat",
+            "/api/generate",
+            "/v1/chat/completions",
+            "/v1/completions",
+            "/v1/responses",
+        ].contains(path)
+    }
+
     /// True for the endpoints this app polls itself. Our own traffic shows up in the access log
     /// exactly like anyone else's, and at one poll per second it would drown the history.
     public var isInventoryPoll: Bool {

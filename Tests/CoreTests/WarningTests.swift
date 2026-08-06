@@ -115,7 +115,7 @@ struct WarningTests {
             tokensPerSecond3s: 5
         )), now: start)
 
-        monitor.expireStaleThroughput(now: start.addingTimeInterval(3))
+        monitor.expireStaleThroughput(now: start.addingTimeInterval(6))
 
         #expect(monitor.throughput == nil)
         #expect(monitor.generationEndedAt == start)

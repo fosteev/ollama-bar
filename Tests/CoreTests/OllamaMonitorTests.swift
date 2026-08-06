@@ -5,25 +5,48 @@ import Testing
 
 @MainActor
 struct OllamaMonitorTests {
-    @Test func throughputUsesTheMovingAverage() {
+    /// Measured on a live run: `tg` moved 29.7→30.2 while `tg_3s` swung 22.8→30.9 over the same
+    /// samples. The steady figure is the one worth showing.
+    @Test func throughputUsesTheSteadyFigure() {
         let monitor = OllamaMonitor()
         monitor.apply(.timing(timing(tg: 5.69, tg3s: 5.27)))
 
-        // tg jitters; tg_3s is what a human can actually read.
-        #expect(monitor.throughput?.tokensPerSecond == 5.27)
-        #expect(monitor.menuBarState == .generating(tokensPerSecond: 5.27))
+        #expect(monitor.throughput?.tokensPerSecond == 5.69)
+        #expect(monitor.menuBarState == .generating(tokensPerSecond: 5.69))
     }
 
-    @Test func throughputSurvivesUntilTheTimeout() {
+    /// llama.cpp prints these lines every three seconds, so the reading has to outlive that gap —
+    /// a shorter timeout made the panel blink between every pair of lines.
+    @Test func throughputSurvivesTheGapBetweenLogLines() {
         let monitor = OllamaMonitor()
         let start = Date()
         monitor.apply(.timing(timing()), now: start)
 
-        monitor.expireStaleThroughput(now: start.addingTimeInterval(1.9))
-        #expect(monitor.throughput != nil)
+        monitor.expireStaleThroughput(now: start.addingTimeInterval(3.5))
+        #expect(monitor.throughput != nil, "3 s is the normal cadence, not a stall")
 
-        monitor.expireStaleThroughput(now: start.addingTimeInterval(2.1))
+        monitor.expireStaleThroughput(now: start.addingTimeInterval(5.1))
         #expect(monitor.throughput == nil)
+    }
+
+    @Test func finishedGenerationRequestClearsTheReadingImmediately() {
+        let monitor = OllamaMonitor()
+        let start = Date()
+        monitor.apply(.timing(timing()), now: start)
+
+        monitor.apply(.request(request(path: "/api/chat")), now: start.addingTimeInterval(0.2))
+
+        #expect(monitor.throughput == nil)
+        #expect(monitor.generationEndedAt != nil)
+    }
+
+    @Test func pollingRequestsDoNotClearTheReading() {
+        let monitor = OllamaMonitor()
+        monitor.apply(.timing(timing()))
+
+        monitor.apply(.request(request(path: "/api/ps")))
+
+        #expect(monitor.throughput != nil)
     }
 
     @Test func menuBarShowsLoadedCountWhenIdle() async {
