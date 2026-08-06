@@ -33,6 +33,11 @@ struct OllamaBarApp: App {
         }
         .defaultSize(width: 620, height: 380)
 
+        Window("Models", id: "models") {
+            ModelsWindow(model: model)
+        }
+        .defaultSize(width: 640, height: 360)
+
         Settings {
             SettingsView(model: model)
         }

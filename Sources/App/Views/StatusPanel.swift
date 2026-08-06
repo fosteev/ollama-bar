@@ -280,6 +280,8 @@ private struct ModelRow: View {
             Button("Unload now") { actions.unload(model.name) }
             Button("Keep loaded until quit") { actions.pin(model.name) }
             Divider()
+            // Talking to the model is a chat client's job, and `ollama run` already is one.
+            Button("Chat in Terminal…") { TerminalLauncher.chat(with: model.name) }
             Button("Copy name") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(model.name, forType: .string)
@@ -440,9 +442,13 @@ private struct FooterView: View {
                     .font(Panel.Typography.footerAction)
                     .foregroundStyle(.secondary)
             } else {
-                Text(leading)
+                // The counter is the way into the full list — a fourth link would crowd a footer
+                // the design deliberately keeps to three.
+                Button(leading) { open("models") }
+                    .buttonStyle(.plain)
                     .font(Panel.Typography.footer)
                     .foregroundStyle(.tertiary)
+                    .help("Show all installed models")
             }
             Spacer()
             HStack(spacing: 12) {

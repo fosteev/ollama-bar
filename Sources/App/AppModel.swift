@@ -82,6 +82,33 @@ final class AppModel {
         Task { try? await controller.pin(model: model) }
     }
 
+    // MARK: - Model listings
+
+    /// One row per installed model, with whatever we know about it from memory and from history.
+    struct ModelListing: Identifiable {
+        let installed: InstalledModel
+        let loaded: LoadedModel?
+        let lastUsed: Date?
+
+        var id: String { installed.name }
+    }
+
+    /// Resident models first — they are the ones costing something right now.
+    var modelListings: [ModelListing] {
+        monitor.installed
+            .map { installed in
+                ModelListing(
+                    installed: installed,
+                    loaded: monitor.loaded.first { $0.name == installed.name },
+                    lastUsed: monitor.exchanges.last { $0.model == installed.name }?.startedAt
+                )
+            }
+            .sorted { left, right in
+                if (left.loaded != nil) != (right.loaded != nil) { return left.loaded != nil }
+                return left.installed.name < right.installed.name
+            }
+    }
+
     // MARK: - Alerts
 
     /// Level the menu bar icon should be tinted with. Clears once the panel has been opened —
