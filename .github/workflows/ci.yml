@@ -1,0 +1,19 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      # Core and Infrastructure build and test as a plain SPM package — no Tuist, no Xcode project.
+      # The proxy tests bind real loopback sockets, which a GitHub runner allows.
+      - name: Test
+        run: swift test

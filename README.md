@@ -2,9 +2,20 @@
 
 A macOS menu bar app that shows what your local Ollama server is actually doing — which models are loaded, what they cost in memory, how fast they are generating, and what they are producing right now.
 
-Status: menu bar app, headless CLI and request interception all work (M1–M3).
+Status: menu bar app, headless CLI, request interception and history on disk all work (M1–M3).
 
-## The app
+## Install
+
+```bash
+brew install tuist
+./scripts/build-release.sh   # builds Release and copies it into /Applications
+open -a OllamaBar
+```
+
+The signature is ad-hoc, so Gatekeeper asks once on first launch. There is no notarized build yet —
+see [docs/TODO.md](docs/TODO.md).
+
+## The app, from Xcode
 
 ```bash
 brew install tuist
@@ -23,6 +34,7 @@ Same core, no Xcode required:
 swift run ollama-bar-cli                # live view, refreshes every 2s
 swift run ollama-bar-cli --once         # one snapshot
 swift run ollama-bar-cli --proxy 11435  # and watch what passes through
+swift run ollama-bar-cli --proxy 11435 --record   # ...and write it to the app's history
 ```
 
 ## Seeing output
@@ -55,8 +67,12 @@ swift test
 ```
 
 `Sources/Core` holds the domain and the monitor, `Sources/Infrastructure` the HTTP client, the
-`server.log` tailer and settings storage, `Sources/App` the SwiftUI menu bar app, `Sources/CLI` the
-terminal front end. Parsers are tested against samples recorded from a live server in `Fixtures/`.
+`server.log` tailer and storage, `Sources/App` the SwiftUI menu bar app, `Sources/CLI` the terminal
+front end. Parsers are tested against samples recorded from a live server in `Fixtures/`.
+
+Settings live in `~/.ollamabar/settings.json`, history in `~/.ollamabar/history` — one JSONL index
+per day, with the prompt and output texts as separate files under `bodies/`. Both are plain files
+you can read, edit or delete by hand. `scripts/make-icon.swift` redraws the app icon.
 
 The logic builds as a plain SPM package, so `swift test` runs without generating an Xcode project;
 Tuist exists only for the `.app` bundle. Both read the same source directories.

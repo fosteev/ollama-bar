@@ -20,7 +20,14 @@ let project = Project(
             "MACOSX_DEPLOYMENT_TARGET": "15.0",
             "CODE_SIGN_IDENTITY": "-",
             "CODE_SIGN_STYLE": "Manual",
-            "ENABLE_DEBUG_DYLIB": "YES",
+            // One place for the version. `Info.plist` reads it back through the build setting.
+            "MARKETING_VERSION": "0.1.0",
+            "CURRENT_PROJECT_VERSION": "1",
+        ],
+        configurations: [
+            // The debug dylib speeds up incremental builds and has no business in a shipped app.
+            .debug(name: "Debug", settings: ["ENABLE_DEBUG_DYLIB": "YES"]),
+            .release(name: "Release", settings: ["ENABLE_DEBUG_DYLIB": "NO"]),
         ]
     ),
     targets: [
@@ -56,6 +63,7 @@ let project = Project(
             deploymentTargets: deploymentTargets,
             infoPlist: .file(path: "Sources/App/Info.plist"),
             sources: ["Sources/App/**"],
+            resources: ["Sources/App/Resources/**"],
             dependencies: [
                 .target(name: "OllamaBarCore"),
                 .target(name: "OllamaBarInfrastructure"),
