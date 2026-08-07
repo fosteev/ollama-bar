@@ -20,15 +20,22 @@ Status: menu bar app, headless CLI, request interception and history on disk all
 brew tap fosteev/ollama-bar https://github.com/fosteev/ollama-bar
 brew trust --cask fosteev/ollama-bar/ollama-bar
 brew install --cask ollama-bar
+xattr -dr com.apple.quarantine /Applications/OllamaBar.app
 ```
 
 The tap is this repository, so there is no second one to keep in sync. Homebrew 6 will not load a
-cask from an unofficial tap until you say so, which is the `brew trust` line — it is a one-off, and
-it goes away if this ever lands in homebrew/cask.
+cask from an unofficial tap until you say so, which is the `brew trust` line — a one-off that goes
+away if this ever lands in homebrew/cask.
 
-Then macOS gets its turn: the signature is ad-hoc, because there is no Developer ID to notarize
-with yet, so the first launch needs System Settings → Privacy & Security → Open Anyway. Both of
-those are on the list in [docs/TODO.md](docs/TODO.md).
+The last line is the ugly one, and it is not optional. The signature is ad-hoc because there is no
+Developer ID to notarize with yet, so macOS refuses the app on first launch and offers exactly one
+way forward: move it to the Trash. It is not a bluff — the app is gone, and the "Open Anyway"
+button older instructions send you to is not offered for this case. Clearing the flag Homebrew set
+on the download is what is left. You will need it again after every upgrade, until there is a
+notarized build — see [docs/TODO.md](docs/TODO.md).
+
+If that trade is not one you want to make, build it yourself instead: a local build is never
+quarantined, because it was never downloaded.
 
 Or build it yourself:
 

@@ -33,10 +33,18 @@ cask "ollama-bar" do
     "~/Library/Saved Application State/com.fosteev.ollamabar.savedState",
   ]
 
+  # Deliberately not stripped in a postflight: dropping Gatekeeper is the user's call to make
+  # knowingly, not something a cask should do quietly on their behalf.
   caveats do
     <<~CAVEATS
-      The signature is ad-hoc: there is no Developer ID to notarize with yet, so macOS asks once
-      on first launch. Approve it under System Settings → Privacy & Security → Open Anyway.
+      The signature is ad-hoc — there is no Developer ID to notarize with yet — so macOS refuses
+      this app on first launch and offers to move it to the Trash. It means it: the app really is
+      deleted. Clear the download flag Homebrew set, then open it:
+
+        xattr -dr com.apple.quarantine #{appdir}/OllamaBar.app
+        open -a OllamaBar
+
+      Repeat after every upgrade, until there is a notarized build.
     CAVEATS
   end
 end
