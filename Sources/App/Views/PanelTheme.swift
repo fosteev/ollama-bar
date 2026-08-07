@@ -47,6 +47,12 @@ enum Panel {
         static let failure = Color.red
         static let chipBackground = Color.primary.opacity(0.07)
 
+        /// The three phases of a request, wherever they are drawn. Loading borrows the reasoning
+        /// hue on purpose — both mean "not answering yet".
+        static let load = reasoning
+        static let prompt = Color.teal
+        static let generation = Color.accentColor
+
         static func activityTint(_ color: Color) -> Color { color.opacity(0.06) }
         static func bannerTint(_ color: Color) -> Color { color.opacity(0.16) }
     }

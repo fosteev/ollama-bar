@@ -17,7 +17,11 @@ struct OllamaBarApp: App {
         MenuBarExtra {
             StatusPanel(model: model)
         } label: {
-            MenuBarLabel(state: model.monitor.menuBarState, alert: model.alertLevel())
+            MenuBarLabel(
+                state: model.monitor.menuBarState,
+                alert: model.alertLevel(),
+                idleSince: model.monitor.generationEndedAt
+            )
         }
         .menuBarExtraStyle(.window)
 

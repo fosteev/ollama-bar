@@ -110,7 +110,7 @@ struct OutputWindow: View {
                     .foregroundStyle(.orange)
             }
         }
-        .font(.system(size: 11, design: .monospaced))
+        .font(Panel.Typography.body)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 14)
         .padding(.vertical, 6)

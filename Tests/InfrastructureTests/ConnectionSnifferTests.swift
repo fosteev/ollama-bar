@@ -128,6 +128,44 @@ struct ConnectionSnifferTests {
         return Data(raw.utf8)
     }
 
+    /// Clients of Ollama do not ask for compression today, but if one ever does, the output has to
+    /// keep showing up rather than silently going blank.
+    @Test func readsAGzippedResponse() throws {
+        let recorder = EventRecorder()
+        let sniffer = ConnectionSniffer(emit: recorder.record)
+
+        sniffer.clientBytes(Self.request(body: #"{"model":"m"}"#))
+        sniffer.serverBytes(Self.gzippedResponse(
+            body: try Fixtures.data("stream-api-chat.ndjson.gz")
+        ))
+
+        // The recorded stream is a thinking model warming up — all reasoning, no answer yet.
+        #expect(recorder.text(kind: .reasoning) == "Thinking Process:\n\n1.  **")
+        #expect(recorder.completions.count == 1)
+    }
+
+    /// An encoding we cannot read must cost us the output and nothing else — no garbage text, no
+    /// crash, and the exchange still completes.
+    @Test func anUnreadableEncodingLosesOnlyTheOutput() {
+        let recorder = EventRecorder()
+        let sniffer = ConnectionSniffer(emit: recorder.record)
+
+        sniffer.clientBytes(Self.request(body: #"{"model":"m"}"#))
+        var raw = "HTTP/1.1 200 OK\r\nContent-Type: application/x-ndjson\r\n"
+        raw += "Content-Encoding: br\r\nContent-Length: 5\r\n\r\nxxxxx"
+        sniffer.serverBytes(Data(raw.utf8))
+
+        #expect(recorder.statuses == [200])
+        #expect(recorder.text(kind: .content).isEmpty)
+        #expect(recorder.completions.count == 1)
+    }
+
+    private static func gzippedResponse(body: Data) -> Data {
+        var head = "HTTP/1.1 200 OK\r\nContent-Type: application/x-ndjson\r\n"
+        head += "Content-Encoding: gzip\r\nContent-Length: \(body.count)\r\n\r\n"
+        return Data(head.utf8) + body
+    }
+
     private static func slices(of data: Data, size: Int) -> [Data] {
         stride(from: 0, to: data.count, by: size).map { offset in
             data.subdata(in: offset..<min(offset + size, data.count))

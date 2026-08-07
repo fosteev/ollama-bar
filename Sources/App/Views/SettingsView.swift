@@ -57,11 +57,6 @@ struct SettingsView: View {
                     }
                 }
                 LaunchAtLoginRow(item: loginItem)
-                Picker("Appearance", selection: $settings.appearance) {
-                    ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .onChange(of: settings.appearance) { onAppearanceChange() }
             } footer: {
                 Text("Without interception the app shows models, memory and speed. Interception "
                      + "adds the prompt, live output and reasoning.")
@@ -106,6 +101,11 @@ struct SettingsView: View {
 
             Section {
                 DisclosureGroup(isExpanded: $showAdvanced) {
+                    Picker("Appearance", selection: $settings.appearance) {
+                        ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: settings.appearance) { onAppearanceChange() }
                     LabeledContent("Log file") {
                         TextField("", text: $settings.logPath)
                             .textFieldStyle(.roundedBorder)

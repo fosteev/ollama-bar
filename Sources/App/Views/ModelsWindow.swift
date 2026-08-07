@@ -58,7 +58,7 @@ struct ModelsWindow: View {
             }
             .width(70)
         }
-        .font(.system(size: 11, design: .monospaced))
+        .font(Panel.Typography.body)
         .contextMenu(forSelectionType: String.self) { ids in
             if let name = ids.first {
                 menu(for: name)

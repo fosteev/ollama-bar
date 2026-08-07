@@ -51,7 +51,7 @@ struct HistoryWindow: View {
                 }
                 .width(56)
             }
-            .font(.system(size: 11, design: .monospaced))
+            .font(Panel.Typography.body)
 
             if let selected {
                 Divider()
@@ -157,16 +157,16 @@ private struct BreakdownView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(heading)
-                .font(.system(size: 11, design: .monospaced))
+                .font(Panel.Typography.body)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
 
             if let timings = exchange.timings, timings.total > 0 {
                 GeometryReader { proxy in
                     HStack(spacing: 2) {
-                        segment("load", timings.load, timings.total, proxy.size.width, .purple)
-                        segment("prompt", timings.prompt, timings.total, proxy.size.width, .teal)
-                        segment("gen", timings.generation, timings.total, proxy.size.width, .blue)
+                        segment("load", timings.load, timings.total, proxy.size.width, Panel.Palette.load)
+                        segment("prompt", timings.prompt, timings.total, proxy.size.width, Panel.Palette.prompt)
+                        segment("gen", timings.generation, timings.total, proxy.size.width, Panel.Palette.generation)
                     }
                 }
                 .frame(height: 22)
@@ -181,11 +181,11 @@ private struct BreakdownView: View {
                             .foregroundStyle(Panel.Palette.warning)
                     }
                 }
-                .font(.system(size: 11, design: .monospaced))
+                .font(Panel.Typography.body)
                 .foregroundStyle(.secondary)
             } else {
                 Text(exchange.failure ?? "No timing reported for this request.")
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(Panel.Typography.body)
                     .foregroundStyle(.secondary)
             }
 
@@ -193,7 +193,7 @@ private struct BreakdownView: View {
                 Divider()
                 ScrollView {
                     Text(text.output.isEmpty ? text.reasoning : text.output)
-                        .font(.system(size: 11, design: .monospaced))
+                        .font(Panel.Typography.body)
                         .foregroundStyle(text.output.isEmpty ? .secondary : .primary)
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -231,7 +231,7 @@ private struct BreakdownView: View {
                 .overlay {
                     if share > 0.18 {
                         Text("\(label) \(Format.phase(value)) s")
-                            .font(.system(size: 10, design: .monospaced))
+                            .font(Panel.Typography.chip)
                             .foregroundStyle(.white)
                             .lineLimit(1)
                     }

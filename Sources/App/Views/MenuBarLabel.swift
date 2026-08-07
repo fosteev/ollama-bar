@@ -7,8 +7,15 @@ import SwiftUI
 /// seeing after a day. A warning changes the icon's colour rather than adding text: colour costs
 /// no width, reads in peripheral vision, and no warning fits in a menu bar sentence anyway.
 struct MenuBarLabel: View {
+    /// How long a model sits unused before the dot stops asking for attention.
+    static let dimAfter: TimeInterval = 30
+
     let state: MenuBarState
     let alert: AppModel.AlertLevel
+    /// When generation last stopped, for the fade below.
+    let idleSince: Date?
+
+    @State private var dimmed = false
 
     var body: some View {
         HStack(spacing: 5) {
@@ -27,11 +34,32 @@ struct MenuBarLabel: View {
                 Circle()
                     .fill(dotColor)
                     .frame(width: 4, height: 4)
+                    .opacity(dimmed ? 0.45 : 1)
+                    .animation(.easeInOut(duration: 0.6), value: dimmed)
             case .idle, .unreachable:
                 EmptyView()
             }
         }
+        // One sleep, armed when generation stops and cancelled when it resumes — not a timer
+        // ticking forever to change one dot's opacity. That trade is why this was deferred.
+        .task(id: fadeKey) {
+            dimmed = false
+            guard case .idle(let loadedCount) = state, loadedCount > 0, let idleSince else { return }
+            let remaining = Self.dimAfter - Date.now.timeIntervalSince(idleSince)
+            if remaining > 0 {
+                try? await Task.sleep(for: .seconds(remaining))
+                guard !Task.isCancelled else { return }
+            }
+            dimmed = true
+        }
         .accessibilityLabel(accessibilityLabel)
+    }
+
+    /// Deliberately not sensitive to the loaded count: a model appearing in memory is not the kind
+    /// of activity that should make the dot bright again.
+    private var fadeKey: String {
+        if case .generating = state { return "generating" }
+        return "idle-\(idleSince?.timeIntervalSince1970 ?? 0)"
     }
 
     private var iconColor: Color {

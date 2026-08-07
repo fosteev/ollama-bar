@@ -113,7 +113,8 @@ final class ConnectionSniffer: @unchecked Sendable {
                     framing: HTTPStreamParser.framing(for: head, isResponse: true),
                     parser: PayloadParser(
                         dialect: .forContentType(head.value("Content-Type"))
-                    )
+                    ),
+                    contentEncoding: head.value("Content-Encoding")
                 )
             }
 
@@ -212,12 +213,35 @@ private struct ResponseInProgress {
     private var promptTokens: Int?
     private var completionTokens: Int?
     private var timings: ExchangeTimings?
+    private let inflater: GzipInflater?
+    /// The body is compressed in a way we cannot read. The relay still forwards it perfectly; we
+    /// just stop pretending the bytes are text.
+    private let unreadable: Bool
 
-    init(id: UUID, framing: HTTPStreamParser.BodyFraming, parser: PayloadParser) {
+    init(
+        id: UUID,
+        framing: HTTPStreamParser.BodyFraming,
+        parser: PayloadParser,
+        contentEncoding: String? = nil
+    ) {
         self.id = id
         self.framing = framing
         self.parser = parser
         if case .length(let length) = framing { remaining = length }
+
+        switch contentEncoding?.lowercased().trimmingCharacters(in: .whitespaces) {
+        case nil, "", "identity":
+            inflater = nil
+            unreadable = false
+        case "gzip", "x-gzip":
+            let inflater = GzipInflater()
+            self.inflater = inflater
+            unreadable = inflater == nil
+        default:
+            // br, zstd, and zlib-wrapped deflate. Clients of Ollama do not ask for these today.
+            inflater = nil
+            unreadable = true
+        }
     }
 
     mutating func consume(_ buffer: inout Data, emit: (ProxyEvent) -> Void) -> Bool {
@@ -247,8 +271,9 @@ private struct ResponseInProgress {
             buffer.removeAll()
         }
 
-        if !payload.isEmpty {
-            forward(parser.parse(payload), emit: emit)
+        if !payload.isEmpty, !unreadable {
+            let decoded = inflater.map { $0.inflate(payload) } ?? payload
+            if !decoded.isEmpty { forward(parser.parse(decoded), emit: emit) }
         }
         return complete
     }
