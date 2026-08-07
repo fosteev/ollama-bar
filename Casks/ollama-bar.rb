@@ -7,7 +7,7 @@
 # `version` and `sha256` below are rewritten by .github/workflows/release.yml on every tag.
 cask "ollama-bar" do
   version "0.1.0"
-  sha256 "0000000000000000000000000000000000000000000000000000000000000000"
+  sha256 "a8a9e369b89641d9fb552779acc65c5fb0d7b9f8341a52b90d2202ebfe3f31df"
 
   url "https://github.com/fosteev/ollama-bar/releases/download/v#{version}/OllamaBar-#{version}.zip"
   name "ollama-bar"
