@@ -1,4 +1,4 @@
-<img src="Sources/App/Resources/Assets.xcassets/AppIcon.appiconset/icon-256.png" width="104" align="right" alt="">
+<img src="Sources/App/Resources/Assets.xcassets/AppIcon.appiconset/icon-256.png" width="96" alt="">
 
 # ollama-bar
 
