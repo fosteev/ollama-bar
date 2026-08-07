@@ -80,6 +80,20 @@ struct SettingsView: View {
                         )
                         .onChange(of: settings.pollInterval) { onApply() }
                     }
+                    LabeledContent("History") {
+                        HStack(spacing: 10) {
+                            Toggle("", isOn: $settings.historyEnabled)
+                                .labelsHidden()
+                                .onChange(of: settings.historyEnabled) { onApply() }
+                            if settings.historyEnabled {
+                                Stepper(
+                                    "keep \(settings.historyRetentionDays)d",
+                                    value: $settings.historyRetentionDays,
+                                    in: 1...365
+                                )
+                            }
+                        }
+                    }
                     Button("Restore defaults") {
                         settings.resetToDefaults()
                         onApply()
@@ -89,7 +103,10 @@ struct SettingsView: View {
                         Text("Advanced")
                         Spacer()
                         if !showAdvanced {
-                            Text("log path · poll \(settings.pollInterval)s")
+                            Text("log path · poll \(settings.pollInterval)s · "
+                                 + (settings.historyEnabled
+                                    ? "history \(settings.historyRetentionDays)d"
+                                    : "no history"))
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.tertiary)
                         }

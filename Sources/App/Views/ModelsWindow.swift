@@ -9,6 +9,7 @@ import SwiftUI
 struct ModelsWindow: View {
     let model: AppModel
 
+    @Environment(\.openWindow) private var openWindow
     @State private var selection: String?
 
     var body: some View {
@@ -80,6 +81,12 @@ struct ModelsWindow: View {
             Button("Keep loaded until quit") { model.pin(name) }
         } else {
             Button("Load into memory") { model.pin(name) }
+        }
+        Divider()
+        Button("Show requests for this model…") {
+            model.showHistory(for: name)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            openWindow(id: "history")
         }
         Divider()
         Button("Copy name") {

@@ -30,11 +30,16 @@ struct OllamaBarCLI {
         }
         proxy?.start()
 
+        // Off by default: the usual case is the app alone writing history, and a debugging tool
+        // should not quietly add rows to it.
+        let recorder = options.record ? HistoryStore() : nil
+
         let driver = MonitorDriver(
             monitor: monitor,
             inventory: client,
             events: ServerLogTailer(url: options.logURL),
             proxy: proxy,
+            recorder: recorder,
             pollInterval: .seconds(options.interval)
         )
         driver.start()
@@ -155,16 +160,19 @@ private struct Options {
     var interval = 2
     var proxyPort: Int?
     var once = false
+    var record = false
     var showHelp = false
     let isTTY = isatty(FileHandle.standardOutput.fileDescriptor) == 1
 
     static let usage = """
-    usage: ollama-bar-cli [--host URL] [--log PATH] [--interval SECONDS] [--proxy PORT] [--once]
+    usage: ollama-bar-cli [--host URL] [--log PATH] [--interval SECONDS] [--proxy PORT]
+                          [--record] [--once]
 
       --host      Ollama base URL (default \(OllamaHTTPClient.defaultBaseURL))
       --log       server.log path (default \(ServerLogTailer.defaultURL.path))
       --interval  refresh interval in seconds (default 2)
       --proxy     relay this port to Ollama and report what passes through
+      --record    also write what passes through to \(HistoryStore.defaultDirectory.path)
       --once      print one inventory snapshot and exit (no log tailing)
     """
 
@@ -184,6 +192,8 @@ private struct Options {
                 if let value = iterator.next(), let port = Int(value), port > 0 {
                     proxyPort = port
                 }
+            case "--record":
+                record = true
             case "--once":
                 once = true
             case "--help", "-h":

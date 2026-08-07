@@ -8,6 +8,7 @@ public final class MonitorDriver {
     private let inventory: ModelInventorySource
     private let events: LogEventSource
     private let proxy: ProxyEventSource?
+    private let recorder: ExchangeRecorder?
     private let pollInterval: Duration
     private let installedPollInterval: Duration
     private let expiryTick: Duration
@@ -18,6 +19,7 @@ public final class MonitorDriver {
         inventory: ModelInventorySource,
         events: LogEventSource,
         proxy: ProxyEventSource? = nil,
+        recorder: ExchangeRecorder? = nil,
         pollInterval: Duration = .seconds(2),
         installedPollInterval: Duration = .seconds(30),
         expiryTick: Duration = .milliseconds(500)
@@ -26,6 +28,7 @@ public final class MonitorDriver {
         self.inventory = inventory
         self.events = events
         self.proxy = proxy
+        self.recorder = recorder
         self.pollInterval = pollInterval
         self.installedPollInterval = installedPollInterval
         self.expiryTick = expiryTick
@@ -60,10 +63,11 @@ public final class MonitorDriver {
         })
 
         if let proxy {
-            tasks.append(Task { [monitor, proxy] in
+            tasks.append(Task { [monitor, proxy, recorder] in
                 for await event in proxy.events() {
                     if Task.isCancelled { return }
-                    monitor.apply(event)
+                    let finished = monitor.apply(event)
+                    if !finished.isEmpty { recorder?.record(finished) }
                 }
             })
         }

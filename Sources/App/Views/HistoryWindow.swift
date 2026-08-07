@@ -1,15 +1,23 @@
 import OllamaBarCore
+import OllamaBarInfrastructure
 import SwiftUI
 
 /// Requests seen through the proxy, with the one number nothing else in the stack gives you:
-/// where the wall clock actually went.
+/// where the wall clock actually went. Rows come from `AppModel`, which merges what is still in
+/// memory with what was written down — so this window survives a restart.
 struct HistoryWindow: View {
     let model: AppModel
 
     @State private var selection: ProxiedExchange.ID?
+    @State private var selectedBody: ExchangeBody?
 
     var body: some View {
         VStack(spacing: 0) {
+            if let filter = model.historyFilter {
+                FilterBar(model: filter) { model.historyFilter = nil }
+                Divider()
+            }
+
             Table(rows, selection: $selection) {
                 TableColumn("Time") { row in
                     Text(Format.clock(row.startedAt)).monospacedDigit()
@@ -47,30 +55,60 @@ struct HistoryWindow: View {
 
             if let selected {
                 Divider()
-                BreakdownView(exchange: selected)
+                BreakdownView(exchange: selected, text: selectedBody)
             }
         }
         .frame(minWidth: 520, minHeight: 300)
         .navigationTitle("Requests")
         .navigationSubtitle(summary)
+        .task { await model.refreshHistory() }
+        .onChange(of: model.historyGeneration) {
+            Task { await model.refreshHistory() }
+        }
+        .onChange(of: model.historyFilter) {
+            Task { await model.refreshHistory() }
+        }
+        // The texts are the expensive half of a record — fetched only for the row being read.
+        .task(id: selected?.id) {
+            selectedBody = nil
+            guard let selected else { return }
+            selectedBody = await model.historyBody(for: selected)
+        }
     }
 
     /// Newest first: the request you want is almost always the last one.
     private var rows: [ProxiedExchange] {
-        model.monitor.exchanges.reversed()
+        model.historyRows
     }
 
     private var selected: ProxiedExchange? {
         rows.first { $0.id == selection } ?? rows.first
     }
 
+    /// Today rather than "everything in memory": with history on disk the second number would
+    /// grow without bound and mean nothing.
     private var summary: String {
-        let exchanges = model.monitor.exchanges
-        let input = exchanges.compactMap(\.promptTokens).reduce(0, +)
-        let output = exchanges.compactMap(\.completionTokens).reduce(0, +)
-        let spent = exchanges.compactMap(\.duration).reduce(0, +)
-        return "\(exchanges.count) requests · \(Format.tokensCompact(input)) in / "
-            + "\(Format.tokensCompact(output)) out · \(Format.elapsed(spent))"
+        guard let today = model.today else { return "—" }
+        let totals = model.historyFilter
+            .flatMap { name in today.byModel.first { $0.model == name } }
+        let requests = totals?.requests ?? today.requests
+        let input = totals?.promptTokens ?? today.promptTokens
+        let output = totals?.completionTokens ?? today.completionTokens
+
+        var parts = [
+            "Today: \(requests) requests",
+            "\(Format.tokensCompact(input)) in / \(Format.tokensCompact(output)) out",
+        ]
+        if totals == nil {
+            parts.append(Format.elapsed(today.duration))
+            if today.loadTime > 1 {
+                parts.append("\(Format.elapsed(today.loadTime)) loading")
+            }
+            if today.failures > 0 {
+                parts.append("\(today.failures) failed")
+            }
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func phases(_ exchange: ProxiedExchange) -> String {
@@ -90,10 +128,31 @@ struct HistoryWindow: View {
     }
 }
 
+/// Shown while the table is narrowed to one model, so the subtitle's numbers are never read as
+/// "everything".
+private struct FilterBar: View {
+    let model: String
+    let clear: () -> Void
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("Showing").foregroundStyle(.secondary)
+            Text(model).fontWeight(.medium)
+            Spacer()
+            Button("Show all", action: clear).buttonStyle(.link)
+        }
+        .font(Panel.Typography.body)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+    }
+}
+
 /// The only chart in the app. It earns its place: three numbers answer "how long", the proportion
 /// answers "on what" — and does it faster than comparing them in your head.
 private struct BreakdownView: View {
     let exchange: ProxiedExchange
+    /// Loaded lazily; nil until it arrives, or for a request that carried no text at all.
+    let text: ExchangeBody?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -128,6 +187,18 @@ private struct BreakdownView: View {
                 Text(exchange.failure ?? "No timing reported for this request.")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(.secondary)
+            }
+
+            if let text, !text.output.isEmpty || !text.reasoning.isEmpty {
+                Divider()
+                ScrollView {
+                    Text(text.output.isEmpty ? text.reasoning : text.output)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundStyle(text.output.isEmpty ? .secondary : .primary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(height: 90)
             }
         }
         .padding(12)

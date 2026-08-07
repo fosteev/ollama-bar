@@ -207,16 +207,25 @@ public final class OllamaMonitor {
         }
     }
 
-    public func apply(_ event: ProxyEvent) {
+    /// Returns the exchanges that just left the live set and are worth writing down: the one that
+    /// reached a terminal event, or the ones the history limit evicted mid-flight. Still no I/O
+    /// here — the monitor only says what happened, `MonitorDriver` decides who hears it.
+    @discardableResult
+    public func apply(_ event: ProxyEvent) -> [ProxiedExchange] {
         switch event {
         case .started(let exchange):
             exchanges.append(exchange)
-            if exchanges.count > Self.exchangeHistoryLimit {
-                exchanges.removeFirst(exchanges.count - Self.exchangeHistoryLimit)
-            }
+            guard exchanges.count > Self.exchangeHistoryLimit else { return [] }
+            let dropped = exchanges.prefix(exchanges.count - Self.exchangeHistoryLimit)
+            // Finished ones were already reported at their terminal event; only the still-running
+            // ones would otherwise vanish without a trace.
+            let unfinished = dropped.filter(\.isActive)
+            exchanges.removeFirst(exchanges.count - Self.exchangeHistoryLimit)
+            return unfinished
 
         case .responded(let id, let status):
             update(id) { $0.status = status }
+            return []
 
         case .output(let id, let delta, let kind):
             update(id) { exchange in
@@ -225,29 +234,37 @@ public final class OllamaMonitor {
                 case .reasoning: Self.append(delta, to: &exchange.reasoning, truncated: &exchange.outputTruncated)
                 }
             }
+            return []
 
         case .toolCall(let id, let name):
             update(id) { $0.toolCalls.append(name) }
+            return []
 
         case .completed(let id, let promptTokens, let completionTokens, let timings, let at):
-            update(id) { exchange in
+            return finished(update(id) { exchange in
                 exchange.promptTokens = promptTokens ?? exchange.promptTokens
                 exchange.completionTokens = completionTokens ?? exchange.completionTokens
                 exchange.timings = timings ?? exchange.timings
                 exchange.finishedAt = at
-            }
+            })
 
         case .failed(let id, let reason, let at):
-            update(id) { exchange in
+            return finished(update(id) { exchange in
                 exchange.failure = reason
                 exchange.finishedAt = at
-            }
+            })
         }
     }
 
-    private func update(_ id: UUID, _ body: (inout ProxiedExchange) -> Void) {
-        guard let index = exchanges.lastIndex(where: { $0.id == id }) else { return }
+    @discardableResult
+    private func update(_ id: UUID, _ body: (inout ProxiedExchange) -> Void) -> ProxiedExchange? {
+        guard let index = exchanges.lastIndex(where: { $0.id == id }) else { return nil }
         body(&exchanges[index])
+        return exchanges[index]
+    }
+
+    private func finished(_ exchange: ProxiedExchange?) -> [ProxiedExchange] {
+        exchange.map { [$0] } ?? []
     }
 
     private static func append(_ delta: String, to text: inout String, truncated: inout Bool) {

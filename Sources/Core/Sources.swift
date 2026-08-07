@@ -12,6 +12,12 @@ public protocol LogEventSource: Sendable {
     func events() -> AsyncStream<LogEvent>
 }
 
+/// Where exchanges go once they leave the live set. Implemented by the history store in
+/// Infrastructure; the monitor itself never writes anything.
+public protocol ExchangeRecorder: Sendable {
+    func record(_ exchanges: [ProxiedExchange])
+}
+
 /// The one thing this app changes rather than observes: handing memory back.
 public protocol ModelController: Sendable {
     func unload(model: String) async throws

@@ -249,6 +249,8 @@ private struct ModelRow: View {
     let now: Date
     let actions: AppModel
 
+    @Environment(\.openWindow) private var openWindow
+
     var body: some View {
         VStack(alignment: .leading, spacing: Panel.Metrics.rowGap) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -282,6 +284,11 @@ private struct ModelRow: View {
             Divider()
             // Talking to the model is a chat client's job, and `ollama run` already is one.
             Button("Chat in Terminal…") { TerminalLauncher.chat(with: model.name) }
+            Button("Show requests for this model…") {
+                actions.showHistory(for: model.name)
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                openWindow(id: "history")
+            }
             Button("Copy name") {
                 NSPasteboard.general.clearContents()
                 NSPasteboard.general.setString(model.name, forType: .string)
@@ -452,7 +459,7 @@ private struct FooterView: View {
             }
             Spacer()
             HStack(spacing: 12) {
-                if !model.monitor.exchanges.isEmpty {
+                if model.hasHistory {
                     Button("History…") { open("history") }
                         .buttonStyle(.link)
                 }

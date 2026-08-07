@@ -61,6 +61,16 @@ final class AppSettings {
         didSet { store.set(appearance.rawValue, for: "app.appearance") }
     }
 
+    /// Writing history down is what makes it survive a restart. Off means the app forgets
+    /// everything on quit, as it did before.
+    var historyEnabled: Bool {
+        didSet { store.set(historyEnabled, for: "history.enabled") }
+    }
+
+    var historyRetentionDays: Int {
+        didSet { store.set(historyRetentionDays, for: "history.retentionDays") }
+    }
+
     init(store: JSONSettingsStore = JSONSettingsStore()) {
         self.store = store
         self.host = store.string("ollama.host") ?? OllamaHTTPClient.defaultBaseURL.absoluteString
@@ -70,6 +80,9 @@ final class AppSettings {
         self.proxyPort = store.int("proxy.port") ?? 11435
         self.appearance = store.string("app.appearance")
             .flatMap(AppAppearance.init(rawValue:)) ?? .system
+        self.historyEnabled = store.bool("history.enabled") ?? true
+        self.historyRetentionDays = (store.int("history.retentionDays") ?? HistoryStore.defaultRetentionDays)
+            .clamped(to: 1...365)
     }
 
     var baseURL: URL {
@@ -97,5 +110,13 @@ final class AppSettings {
         proxyEnabled = false
         proxyPort = 11435
         appearance = .system
+        historyEnabled = true
+        historyRetentionDays = HistoryStore.defaultRetentionDays
+    }
+}
+
+private extension Comparable {
+    func clamped(to range: ClosedRange<Self>) -> Self {
+        min(max(self, range.lowerBound), range.upperBound)
     }
 }
