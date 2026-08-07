@@ -61,4 +61,5 @@ terminal front end. Parsers are tested against samples recorded from a live serv
 The logic builds as a plain SPM package, so `swift test` runs without generating an Xcode project;
 Tuist exists only for the `.app` bundle. Both read the same source directories.
 
-See [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap.
+See [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap, and
+[docs/TODO.md](docs/TODO.md) for what is still missing.
