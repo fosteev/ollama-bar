@@ -9,6 +9,7 @@ public final class MonitorDriver {
     private let events: LogEventSource
     private let proxy: ProxyEventSource?
     private let recorder: ExchangeRecorder?
+    private let observer: MonitorEventObserver?
     private let pollInterval: Duration
     private let installedPollInterval: Duration
     private let expiryTick: Duration
@@ -20,6 +21,7 @@ public final class MonitorDriver {
         events: LogEventSource,
         proxy: ProxyEventSource? = nil,
         recorder: ExchangeRecorder? = nil,
+        observer: MonitorEventObserver? = nil,
         pollInterval: Duration = .seconds(2),
         installedPollInterval: Duration = .seconds(30),
         expiryTick: Duration = .milliseconds(500)
@@ -29,6 +31,7 @@ public final class MonitorDriver {
         self.events = events
         self.proxy = proxy
         self.recorder = recorder
+        self.observer = observer
         self.pollInterval = pollInterval
         self.installedPollInterval = installedPollInterval
         self.expiryTick = expiryTick
@@ -41,9 +44,10 @@ public final class MonitorDriver {
     public func start() {
         guard tasks.isEmpty else { return }
 
-        tasks.append(Task { [monitor, inventory, pollInterval] in
+        tasks.append(Task { [monitor, inventory, observer, pollInterval] in
             while !Task.isCancelled {
-                await monitor.refreshLoaded(using: inventory)
+                let changes = await monitor.refreshLoaded(using: inventory)
+                if !changes.isEmpty { observer?.observe(changes) }
                 try? await Task.sleep(for: pollInterval)
             }
         })
@@ -63,11 +67,20 @@ public final class MonitorDriver {
         })
 
         if let proxy {
-            tasks.append(Task { [monitor, proxy, recorder] in
+            tasks.append(Task { [monitor, proxy, recorder, observer] in
                 for await event in proxy.events() {
                     if Task.isCancelled { return }
                     let finished = monitor.apply(event)
-                    if !finished.isEmpty { recorder?.record(finished) }
+                    guard !finished.isEmpty else { continue }
+                    recorder?.record(finished)
+                    let failures = finished.filter(\.isFailure).map {
+                        MonitorEvent.requestFailed(
+                            model: $0.model,
+                            path: $0.path,
+                            reason: $0.failure ?? "HTTP \($0.status.map(String.init) ?? "error")"
+                        )
+                    }
+                    if !failures.isEmpty { observer?.observe(failures) }
                 }
             })
         }

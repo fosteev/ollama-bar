@@ -71,6 +71,8 @@ public final class OllamaMonitor {
 
     private var residentNames: Set<String> = []
     private var everResidentNames: Set<String> = []
+    /// The first poll describes the world as we found it, not as something that just happened.
+    private var hasPolledInventory = false
 
     public init() {}
 
@@ -141,28 +143,49 @@ public final class OllamaMonitor {
         return result.sorted { $0.severity > $1.severity }
     }
 
-    /// Loaded models change constantly — this is the hot path, polled on every tick.
-    public func refreshLoaded(using source: ModelInventorySource, now: Date = .now) async {
+    /// Loaded models change constantly — this is the hot path, polled on every tick. Returns what
+    /// changed since the previous poll, for whoever cares to say it out loud.
+    @discardableResult
+    public func refreshLoaded(
+        using source: ModelInventorySource,
+        now: Date = .now
+    ) async -> [MonitorEvent] {
         do {
             let models = try await source.loadedModels()
-            noteResidency(of: models, now: now)
+            let events = noteResidency(of: models, now: now)
             loaded = models
             connection = .connected
             lastSeenAt = now
+            return events
         } catch {
             connection = .unreachable(error.localizedDescription)
+            return []
         }
     }
 
     /// A model that goes away and comes back was reloaded — Ollama gives no event for this, but
     /// each reload costs seconds of weight loading, and four in an hour is worth saying out loud.
-    private func noteResidency(of models: [LoadedModel], now: Date) {
+    private func noteResidency(of models: [LoadedModel], now: Date) -> [MonitorEvent] {
         let names = Set(models.map(\.name))
         let returned = names.subtracting(residentNames).intersection(everResidentNames)
         reloads.append(contentsOf: returned.map { _ in now })
         reloads.removeAll { now.timeIntervalSince($0) > 3600 }
+
+        let arrived = names.subtracting(residentNames).sorted()
+        let gone = residentNames.subtracting(names).sorted()
         everResidentNames.formUnion(names)
         residentNames = names
+
+        guard hasPolledInventory else {
+            hasPolledInventory = true
+            return []
+        }
+        // One in, one out, in the same poll: that is a swap, and it is the one people care about,
+        // because the model that left will cost seconds to load again.
+        if arrived.count == 1, gone.count == 1 {
+            return [.modelSwapped(from: gone[0], to: arrived[0])]
+        }
+        return gone.map { .modelEvicted($0) } + arrived.map { .modelLoaded($0) }
     }
 
     /// The disk inventory changes only when someone pulls or deletes a model. A failure here keeps

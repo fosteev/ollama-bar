@@ -11,6 +11,7 @@ final class AppModel {
     let monitor = OllamaMonitor()
     let settings: AppSettings
     let loginItem = LoginItem()
+    let notifier: Notifier
 
     /// Disclosure state for the last-request row. Remembered across openings, per the design.
     var lastRequestExpanded = false
@@ -36,6 +37,7 @@ final class AppModel {
 
     init(settings: AppSettings = AppSettings(), historyStore: HistoryStore? = nil) {
         self.settings = settings
+        self.notifier = Notifier(settings: settings)
         self.historyStore = historyStore
             ?? HistoryStore(retentionDays: settings.historyRetentionDays)
         Task { [historyStore = self.historyStore] in
@@ -84,6 +86,7 @@ final class AppModel {
             events: ServerLogTailer(url: settings.logURL),
             proxy: proxy,
             recorder: settings.historyEnabled ? historyTap : nil,
+            observer: settings.notifiesAnything ? notifier : nil,
             pollInterval: .seconds(settings.pollInterval)
         )
         driver.start()
@@ -191,6 +194,8 @@ final class AppModel {
 
     func unload(_ model: String) {
         guard let controller else { return }
+        // So the eviction we are about to cause does not come back as a notification.
+        notifier.willUnload(model)
         Task { try? await controller.unload(model: model) }
     }
 

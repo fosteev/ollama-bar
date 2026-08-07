@@ -7,6 +7,7 @@ import SwiftUI
 struct SettingsView: View {
     @Bindable var settings: AppSettings
     private let loginItem: LoginItem
+    private let notifier: Notifier
     private let onApply: () -> Void
     private let onAppearanceChange: () -> Void
     private let reachable: () -> Bool
@@ -16,6 +17,7 @@ struct SettingsView: View {
     init(model: AppModel) {
         self.settings = model.settings
         self.loginItem = model.loginItem
+        self.notifier = model.notifier
         self.onApply = model.restart
         self.onAppearanceChange = model.applyAppearance
         self.reachable = { if case .connected = model.monitor.connection { true } else { false } }
@@ -65,6 +67,41 @@ struct SettingsView: View {
                      + "adds the prompt, live output and reasoning.")
                 .font(.system(size: 11))
                 .foregroundStyle(.secondary)
+            }
+
+            Section {
+                NotificationRow(
+                    title: "Model swapped",
+                    help: "One model displaced another in memory.",
+                    isOn: $settings.notifyOnSwap,
+                    notifier: notifier
+                )
+                NotificationRow(
+                    title: "Model unloaded",
+                    help: "A model expired without you asking.",
+                    isOn: $settings.notifyOnEviction,
+                    notifier: notifier
+                )
+                NotificationRow(
+                    title: "Request failed",
+                    help: "Only with interception on.",
+                    isOn: $settings.notifyOnFailure,
+                    notifier: notifier
+                )
+                .onChange(of: settings.notifiesAnything) { onApply() }
+            } header: {
+                Text("Notify me when")
+            } footer: {
+                if notifier.permission == .denied && settings.notifiesAnything {
+                    Text("Notifications are blocked for this app in System Settings.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Panel.Palette.warning)
+                } else {
+                    Text("At most one of each per minute — a thrashing server would otherwise "
+                         + "notify you every few seconds.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+                }
             }
 
             Section {
@@ -120,6 +157,30 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// Permission is asked for here, on the first toggle switched on — not at launch. A monitor that
+/// opens with a permission dialog before showing anything has not earned the interruption.
+private struct NotificationRow: View {
+    let title: String
+    let help: String
+    @Binding var isOn: Bool
+    let notifier: Notifier
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                Text(help)
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .onChange(of: isOn) {
+            guard isOn else { return }
+            Task { await notifier.requestPermission() }
+        }
     }
 }
 

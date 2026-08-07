@@ -71,6 +71,21 @@ final class AppSettings {
         didSet { store.set(historyRetentionDays, for: "history.retentionDays") }
     }
 
+    /// All three default to off. A monitor that interrupts by default is a monitor you turn off.
+    var notifyOnSwap: Bool {
+        didSet { store.set(notifyOnSwap, for: "notify.swap") }
+    }
+
+    var notifyOnEviction: Bool {
+        didSet { store.set(notifyOnEviction, for: "notify.eviction") }
+    }
+
+    var notifyOnFailure: Bool {
+        didSet { store.set(notifyOnFailure, for: "notify.failure") }
+    }
+
+    var notifiesAnything: Bool { notifyOnSwap || notifyOnEviction || notifyOnFailure }
+
     init(store: JSONSettingsStore = JSONSettingsStore()) {
         self.store = store
         self.host = store.string("ollama.host") ?? OllamaHTTPClient.defaultBaseURL.absoluteString
@@ -83,6 +98,9 @@ final class AppSettings {
         self.historyEnabled = store.bool("history.enabled") ?? true
         self.historyRetentionDays = (store.int("history.retentionDays") ?? HistoryStore.defaultRetentionDays)
             .clamped(to: 1...365)
+        self.notifyOnSwap = store.bool("notify.swap") ?? false
+        self.notifyOnEviction = store.bool("notify.eviction") ?? false
+        self.notifyOnFailure = store.bool("notify.failure") ?? false
     }
 
     var baseURL: URL {
@@ -112,6 +130,9 @@ final class AppSettings {
         appearance = .system
         historyEnabled = true
         historyRetentionDays = HistoryStore.defaultRetentionDays
+        notifyOnSwap = false
+        notifyOnEviction = false
+        notifyOnFailure = false
     }
 }
 
