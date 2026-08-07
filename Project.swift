@@ -21,8 +21,8 @@ let project = Project(
             "CODE_SIGN_IDENTITY": "-",
             "CODE_SIGN_STYLE": "Manual",
             // One place for the version. `Info.plist` reads it back through the build setting.
-            "MARKETING_VERSION": "0.1.0",
-            "CURRENT_PROJECT_VERSION": "1",
+            "MARKETING_VERSION": "0.1.1",
+            "CURRENT_PROJECT_VERSION": "2",
         ],
         configurations: [
             // The debug dylib speeds up incremental builds and has no business in a shipped app.
