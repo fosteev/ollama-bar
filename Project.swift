@@ -27,7 +27,17 @@ let project = Project(
         configurations: [
             // The debug dylib speeds up incremental builds and has no business in a shipped app.
             .debug(name: "Debug", settings: ["ENABLE_DEBUG_DYLIB": "YES"]),
-            .release(name: "Release", settings: ["ENABLE_DEBUG_DYLIB": "NO"]),
+            .release(name: "Release", settings: [
+                "ENABLE_DEBUG_DYLIB": "NO",
+                // Notarization refuses a build without it, and it costs an ad-hoc build nothing —
+                // so Release carries it either way and the signed and unsigned artifacts differ
+                // in one thing only, the signature.
+                "ENABLE_HARDENED_RUNTIME": "YES",
+                // Xcode otherwise injects `com.apple.security.get-task-allow` — the entitlement
+                // that lets a debugger attach — into Release too, and the notary service rejects
+                // any binary carrying it. Nothing catches this until the day you first notarize.
+                "CODE_SIGN_INJECT_BASE_ENTITLEMENTS": "NO",
+            ]),
         ]
     ),
     targets: [
@@ -64,6 +74,7 @@ let project = Project(
             infoPlist: .file(path: "Sources/App/Info.plist"),
             sources: ["Sources/App/**"],
             resources: ["Sources/App/Resources/**"],
+            entitlements: .file(path: "Sources/App/OllamaBar.entitlements"),
             dependencies: [
                 .target(name: "OllamaBarCore"),
                 .target(name: "OllamaBarInfrastructure"),

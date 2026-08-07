@@ -34,16 +34,94 @@ jobs:
       - name: Install Tuist
         run: brew install tuist
 
+      # Everything below is written so a repository without the Apple secrets still cuts a release,
+      # ad-hoc signed exactly as before. Fill all six in and the same tag produces a notarized
+      # build instead; nothing else about the pipeline moves. See docs/TODO.md.
+      - name: Look for signing material
+        env:
+          CERTIFICATE: ${{ secrets.DEVELOPER_ID_P12 }}
+        run: |
+          if [ -n "$CERTIFICATE" ]; then
+            echo "SIGNED=yes" >> "$GITHUB_ENV"
+          else
+            echo "SIGNED=no" >> "$GITHUB_ENV"
+            echo "::warning::No Developer ID secrets — this release will be ad-hoc signed and macOS will refuse it until the user clears the quarantine flag by hand."
+          fi
+
+      # A throwaway keychain rather than the login one: the runner is disposable, but leaving a
+      # private key in a keychain that outlives the step is a habit worth not having.
+      - name: Import the Developer ID certificate
+        if: env.SIGNED == 'yes'
+        env:
+          CERTIFICATE: ${{ secrets.DEVELOPER_ID_P12 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password=$(uuidgen)
+          echo "$CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 900 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
+            -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          # Without this codesign stops for a UI prompt that nobody is there to answer.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" login.keychain-db
+
+          rm -f "$RUNNER_TEMP/certificate.p12"
+          echo "KEYCHAIN=$keychain" >> "$GITHUB_ENV"
+          security find-identity -v -p codesigning "$keychain"
+
       - name: Build Release
+        env:
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           tuist generate --no-open
+          signing=(CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES)
+          if [ "$SIGNED" = yes ]; then
+            # --timestamp is not a nicety: notarization rejects a signature without one.
+            signing=(
+              "CODE_SIGN_IDENTITY=Developer ID Application"
+              "DEVELOPMENT_TEAM=$TEAM_ID"
+              "OTHER_CODE_SIGN_FLAGS=--timestamp"
+            )
+          fi
           xcodebuild \
             -workspace OllamaBar.xcworkspace \
             -scheme OllamaBar \
             -configuration Release \
             -destination 'platform=macOS' \
             -derivedDataPath .build/xcode \
+            "${signing[@]}" \
             build
+
+      # Notarization takes the archive, but the ticket is stapled to the app — so this submits a
+      # throwaway zip and the Archive step below packs the stapled bundle for real.
+      - name: Notarize
+        if: env.SIGNED == 'yes'
+        env:
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY_P8 }}
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+        run: |
+          app=.build/xcode/Build/Products/Release/OllamaBar.app
+          codesign --verify --deep --strict --verbose=2 "$app"
+
+          echo "$NOTARY_KEY" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+          ditto -c -k --keepParent --sequesterRsrc "$app" "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --key "$RUNNER_TEMP/notary.p8" \
+            --key-id "$NOTARY_KEY_ID" \
+            --issuer "$NOTARY_ISSUER_ID" \
+            --wait --timeout 30m
+          rm -f "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/notarize.zip"
+
+          # Stapled, the ticket travels with the app: it opens on a machine that is offline, or
+          # after Apple has moved on. Unstapled, the first launch needs the network.
+          xcrun stapler staple "$app"
+          xcrun stapler validate "$app"
+          spctl -a -vvv -t exec "$app"
 
       # ditto rather than zip: it keeps the bundle's symlinks and extended attributes, and a bundle
       # that lost them is a bundle macOS refuses to launch.
@@ -64,14 +142,22 @@ jobs:
           brew tap fosteev/ollama-bar https://github.com/fosteev/ollama-bar
           brew trust --cask fosteev/ollama-bar/ollama-bar
           brew install --cask ollama-bar
-          xattr -dr com.apple.quarantine /Applications/OllamaBar.app
           ```
 
           Homebrew 6 will not load a cask from an unofficial tap until you trust it, hence the
-          third line. The last one is not optional: the signature is ad-hoc — there is no Developer
-          ID to notarize with yet — so macOS refuses the app on first launch and offers only to
-          move it to the Trash, which it will actually do.
+          third line.
           NOTES
+          if [ "$SIGNED" != yes ]; then
+            cat >> "$RUNNER_TEMP/notes.md" <<'NOTES'
+
+          This build is ad-hoc signed, so macOS refuses it on first launch and offers only to move
+          it to the Trash — which it will actually do. One more line, after installing:
+
+          ```
+          xattr -dr com.apple.quarantine /Applications/OllamaBar.app
+          ```
+          NOTES
+          fi
           gh release create "$GITHUB_REF_NAME" "$ZIP" \
             --title "$GITHUB_REF_NAME" \
             --generate-notes \
@@ -94,3 +180,11 @@ jobs:
           git add Casks/ollama-bar.rb
           git commit -m "Point the cask at $GITHUB_REF_NAME"
           git push origin HEAD:main
+
+      # if: always() — a failed build must not leave the signing key sitting in a keychain that is
+      # still on the search list.
+      - name: Forget the signing keychain
+        if: always() && env.SIGNED == 'yes'
+        run: |
+          security list-keychains -d user -s login.keychain-db
+          security delete-keychain "$KEYCHAIN" || true

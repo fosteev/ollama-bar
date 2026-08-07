@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Deliberately empty, and that is the point: the hardened runtime the Release build enables
+	     only needs exceptions for things this app does not do. It is not sandboxed, so reaching
+	     Ollama over the loopback, listening on the proxy port and reading `server.log` need no
+	     entitlement at all; and there is no JIT, no unsigned executable memory, no loading of
+	     plug-ins from elsewhere.
+
+	     Sparkle will be the first thing to want an exception here — it needs
+	     `com.apple.security.cs.disable-library-validation` for its XPC helpers. Until then, an
+	     empty list is the honest description of what we ask the system for. -->
+</dict>
+</plist>

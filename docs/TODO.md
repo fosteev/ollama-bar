@@ -39,17 +39,40 @@
 после чего гоняет тесты, собирает Release, выкладывает архив и переписывает `Casks/ollama-bar.rb`
 под него. Tap лежит в этом же репозитории, отдельный `homebrew-tap` не нужен.
 
-Осталось то, что упирается в Apple Developer ID ($99/год) — без него нотаризация невозможна,
-а Sparkle без подписи бессмысленен:
+### Подпись и нотаризация
 
-- `.entitlements` и `ENABLE_HARDENED_RUNTIME` (Sparkle дополнительно требует
-  `com.apple.security.cs.disable-library-validation` для своих XPC-хелперов);
-- подпись Developer ID, `notarytool`, `stapler` — шаги встают между сборкой и `ditto` в
-  `release.yml`, остальной конвейер не меняется;
-- автообновление — Sparkle, appcast. Sparkle станет первой внешней зависимостью проекта, и
-  заводить её надо через `Tuist/Package.swift`, только для app-таргета, иначе она утечёт в
-  `swift test`. В [ClaudeBar](https://github.com/tddworks/ClaudeBar), откуда бралась раскладка
-  проекта, это всё есть и работает — можно списать.
+Всё, что не упирается в ключ, уже сделано: `Sources/App/OllamaBar.entitlements` (пустой — и это
+осознанно, приложение не в сэндбоксе и исключений не просит), `ENABLE_HARDENED_RUNTIME` в Release,
+а в `release.yml` — импорт сертификата во временную связку ключей, подпись, `notarytool submit
+--wait`, `stapler staple` и удаление связки в `always()`. Всё это включается само, когда появятся
+секреты; без них тег собирается ad-hoc ровно как раньше, только в лог падает warning.
+
+Попутно там же выключен `CODE_SIGN_INJECT_BASE_ENTITLEMENTS`: Xcode подмешивал в Release
+`com.apple.security.cs.get-task-allow`, а нотаризация с ним отклоняет сборку. Без ключа это никак
+не проявляется — вылезло бы ровно в первый заход.
+
+Остаётся аккаунт Apple Developer Program ($99/год) и шесть секретов в репозитории:
+
+| Секрет | Что это |
+|---|---|
+| `DEVELOPER_ID_P12` | сертификат Developer ID Application с приватным ключом, `.p12` в base64 |
+| `DEVELOPER_ID_P12_PASSWORD` | пароль, которым `.p12` экспортировали |
+| `APPLE_TEAM_ID` | Team ID из аккаунта |
+| `NOTARY_KEY_P8` | App Store Connect API key, `.p8` в base64 — даётся на скачивание один раз |
+| `NOTARY_KEY_ID` | Key ID этого ключа |
+| `NOTARY_ISSUER_ID` | Issuer ID аккаунта |
+
+После этого из README и `caveats` каска уходит строка с `xattr`, а релизные ноты перестают её
+печатать сами — там уже стоит условие.
+
+### Автообновление
+
+Sparkle, appcast. Без подписи бессмысленен, так что строго после. Станет первой внешней
+зависимостью проекта, и заводить её надо через `Tuist/Package.swift`, только для app-таргета, иначе
+она утечёт в `swift test`. Ей понадобится `com.apple.security.cs.disable-library-validation` для
+XPC-хелперов — первая запись в пока пустом `.entitlements`. В
+[ClaudeBar](https://github.com/tddworks/ClaudeBar), откуда бралась раскладка проекта, это всё есть
+и работает — можно списать.
 
 Пока подпись ad-hoc, и это дороже, чем казалось. На macOS 26 «спрашивает один раз» уже не работает:
 диалог для ненотаризованного приложения предлагает ровно одну кнопку — «Переместить в Корзину», — и
