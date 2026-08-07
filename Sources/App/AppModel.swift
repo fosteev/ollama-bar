@@ -10,6 +10,7 @@ import SwiftUI
 final class AppModel {
     let monitor = OllamaMonitor()
     let settings: AppSettings
+    let loginItem = LoginItem()
 
     /// Disclosure state for the last-request row. Remembered across openings, per the design.
     var lastRequestExpanded = false

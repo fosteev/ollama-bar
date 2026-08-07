@@ -6,6 +6,7 @@ import SwiftUI
 /// button — settings take effect when the field loses focus.
 struct SettingsView: View {
     @Bindable var settings: AppSettings
+    private let loginItem: LoginItem
     private let onApply: () -> Void
     private let onAppearanceChange: () -> Void
     private let reachable: () -> Bool
@@ -14,6 +15,7 @@ struct SettingsView: View {
 
     init(model: AppModel) {
         self.settings = model.settings
+        self.loginItem = model.loginItem
         self.onApply = model.restart
         self.onAppearanceChange = model.applyAppearance
         self.reachable = { if case .connected = model.monitor.connection { true } else { false } }
@@ -52,6 +54,7 @@ struct SettingsView: View {
                         }
                     }
                 }
+                LaunchAtLoginRow(item: loginItem)
                 Picker("Appearance", selection: $settings.appearance) {
                     ForEach(AppAppearance.allCases) { Text($0.title).tag($0) }
                 }
@@ -117,5 +120,39 @@ struct SettingsView: View {
         .formStyle(.grouped)
         .frame(width: 420)
         .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+/// The toggle is the easy half. The other half is that macOS can accept the registration and then
+/// wait for the user to confirm it in System Settings — silently, unless we say so.
+private struct LaunchAtLoginRow: View {
+    let item: LoginItem
+
+    var body: some View {
+        LabeledContent("Launch at login") {
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("", isOn: Binding(
+                    get: { item.state.isEnabled },
+                    set: { item.set($0) }
+                ))
+                .labelsHidden()
+
+                switch item.state {
+                case .waitingForApproval:
+                    Button("Approve in System Settings…") { item.openSystemSettings() }
+                        .buttonStyle(.link)
+                        .font(.system(size: 11))
+                case .failed(let reason):
+                    Text(reason)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Panel.Palette.warning)
+                        .lineLimit(2)
+                case .on, .off:
+                    EmptyView()
+                }
+            }
+        }
+        // The user can flip this in System Settings while the window is open.
+        .onAppear { item.refresh() }
     }
 }
