@@ -15,14 +15,23 @@ Status: menu bar app, headless CLI, request interception and history on disk all
 ## Install
 
 ```bash
+brew tap fosteev/ollama-bar https://github.com/fosteev/ollama-bar
+brew install --cask ollama-bar
+```
+
+The tap is this repository, so there is no second one to keep in sync. The signature is ad-hoc —
+there is no Developer ID to notarize with yet — so macOS asks once on first launch: System Settings
+→ Privacy & Security → Open Anyway. See [docs/TODO.md](docs/TODO.md).
+
+Or build it yourself:
+
+```bash
 brew install tuist
 ./scripts/build-release.sh   # builds Release and copies it into /Applications
 open -a OllamaBar
 ```
 
-The signature is ad-hoc, so Gatekeeper asks once on first launch. There is no notarized build yet —
-see [docs/TODO.md](docs/TODO.md). From Xcode instead: `tuist generate`, open
-`OllamaBar.xcworkspace`, Cmd+R.
+From Xcode instead: `tuist generate`, open `OllamaBar.xcworkspace`, Cmd+R.
 
 ## In the menu bar
 
@@ -119,5 +128,12 @@ Tuist exists only for the `.app` bundle. Both read the same source directories.
 `scripts/make-icon.swift` redraws the app icon, `scripts/render-design.swift` re-renders the images
 on this page from the mockup.
 
+Releases go out by tag. `scripts/release.sh 0.2.0` moves the version in `Project.swift` — the one
+place it lives — commits, tags and pushes; [the workflow](.github/workflows/release.yml) refuses a
+tag that disagrees with the project, then tests, builds, publishes the archive and points
+[the cask](Casks/ollama-bar.rb) at it.
+
 See [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap, and
 [docs/TODO.md](docs/TODO.md) for what is still missing.
+
+MIT — see [LICENSE](LICENSE).

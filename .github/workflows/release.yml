@@ -1,0 +1,91 @@
+name: Release
+
+# Tags are cut by scripts/release.sh, which moves Project.swift and the tag in one commit.
+on:
+  push:
+    tags: ["v*"]
+
+# The last step points the cask at the release it just made, which means writing to the repo.
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # A tag that disagrees with the project is a release nobody can reproduce: the download says
+      # one version and the app's About box says another. Cheaper to refuse than to yank.
+      - name: Check the tag against the project version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          project=$(sed -n 's/.*"MARKETING_VERSION": "\([^"]*\)".*/\1/p' Project.swift)
+          if [ "$tag" != "$project" ]; then
+            echo "tag $GITHUB_REF_NAME does not match MARKETING_VERSION $project" >&2
+            exit 1
+          fi
+          echo "VERSION=$tag" >> "$GITHUB_ENV"
+
+      - name: Test
+        run: swift test
+
+      - name: Install Tuist
+        run: brew install tuist
+
+      - name: Build Release
+        run: |
+          tuist generate --no-open
+          xcodebuild \
+            -workspace OllamaBar.xcworkspace \
+            -scheme OllamaBar \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath .build/xcode \
+            build
+
+      # ditto rather than zip: it keeps the bundle's symlinks and extended attributes, and a bundle
+      # that lost them is a bundle macOS refuses to launch.
+      - name: Archive
+        run: |
+          zip="$RUNNER_TEMP/OllamaBar-$VERSION.zip"
+          ditto -c -k --keepParent --sequesterRsrc \
+            .build/xcode/Build/Products/Release/OllamaBar.app "$zip"
+          echo "ZIP=$zip" >> "$GITHUB_ENV"
+          echo "SHA256=$(shasum -a 256 "$zip" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
+          ```
+          brew tap fosteev/ollama-bar https://github.com/fosteev/ollama-bar
+          brew install --cask ollama-bar
+          ```
+
+          The signature is ad-hoc — there is no Developer ID to notarize with yet, so macOS asks
+          once on first launch: System Settings → Privacy & Security → Open Anyway.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" "$ZIP" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes \
+            --notes-file "$RUNNER_TEMP/notes.md"
+
+      # Without this the cask still points at the previous release and every upgrade needs a
+      # hand-pasted checksum.
+      - name: Point the cask at this release
+        run: |
+          sed -i '' -E \
+            -e "s/^  version \".*\"/  version \"$VERSION\"/" \
+            -e "s/^  sha256 \".*\"/  sha256 \"$SHA256\"/" \
+            Casks/ollama-bar.rb
+          if git diff --quiet Casks/ollama-bar.rb; then
+            echo "the cask already points at $VERSION"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/ollama-bar.rb
+          git commit -m "Point the cask at $GITHUB_REF_NAME"
+          git push origin HEAD:main

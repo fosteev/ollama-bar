@@ -32,19 +32,26 @@
 
 ## 2. Выпуск
 
-Приложение собирается в Release и ставится в `/Applications` через `scripts/build-release.sh`,
-`swift test` гоняется на каждый пуш. Осталось то, что упирается в Apple Developer ID ($99/год) —
-без него нотаризация невозможна, а Sparkle без подписи бессмысленен:
+Релиз по тегу работает: `scripts/release.sh 0.2.0` двигает `MARKETING_VERSION`, коммитит, ставит
+тег и пушит, а `.github/workflows/release.yml` отказывается собирать тег, разошедшийся с проектом,
+после чего гоняет тесты, собирает Release, выкладывает архив и переписывает `Casks/ollama-bar.rb`
+под него. Tap лежит в этом же репозитории, отдельный `homebrew-tap` не нужен.
+
+Осталось то, что упирается в Apple Developer ID ($99/год) — без него нотаризация невозможна,
+а Sparkle без подписи бессмысленен:
 
 - `.entitlements` и `ENABLE_HARDENED_RUNTIME` (Sparkle дополнительно требует
   `com.apple.security.cs.disable-library-validation` для своих XPC-хелперов);
-- подпись Developer ID, `notarytool`, `stapler`, `.dmg` или `.zip`;
-- автообновление — Sparkle, appcast, релиз по тегу через GitHub Actions. Sparkle станет первой
-  внешней зависимостью проекта, и заводить её надо через `Tuist/Package.swift`, только для
-  app-таргета, иначе она утечёт в `swift test`. В [ClaudeBar](https://github.com/tddworks/ClaudeBar),
-  откуда бралась раскладка проекта, это всё есть и работает — можно списать.
+- подпись Developer ID, `notarytool`, `stapler` — шаги встают между сборкой и `ditto` в
+  `release.yml`, остальной конвейер не меняется;
+- автообновление — Sparkle, appcast. Sparkle станет первой внешней зависимостью проекта, и
+  заводить её надо через `Tuist/Package.swift`, только для app-таргета, иначе она утечёт в
+  `swift test`. В [ClaudeBar](https://github.com/tddworks/ClaudeBar), откуда бралась раскладка
+  проекта, это всё есть и работает — можно списать.
 
-Пока подпись ad-hoc: Gatekeeper спрашивает один раз при первом запуске.
+Пока подпись ad-hoc: macOS спрашивает один раз при первом запуске, и cask честно предупреждает об
+этом в `caveats`. В homebrew/cask с таким и с нулём звёзд не берут — там порог notability, — так
+что свой tap это не временная мера, а то, что есть.
 
 ---
 
