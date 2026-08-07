@@ -130,8 +130,9 @@ files you can read, edit or delete by hand.
 
 The logic builds as a plain SPM package, so `swift test` runs without generating an Xcode project;
 Tuist exists only for the `.app` bundle. Both read the same source directories.
-`scripts/make-icon.swift` redraws the app icon, `scripts/render-design.swift` re-renders the images
-on this page from the mockup.
+`scripts/make-icon.swift` cuts the icon set from `design/icon.png`, applying the rounded square
+macOS expects the artwork to carry; `scripts/render-design.swift` re-renders the images on this page
+from the mockup.
 
 Releases go out by tag. `scripts/release.sh 0.2.0` moves the version in `Project.swift` — the one
 place it lives — commits, tags and pushes; [the workflow](.github/workflows/release.yml) refuses a
