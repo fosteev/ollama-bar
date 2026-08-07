@@ -59,6 +59,9 @@ public final class OllamaMonitor {
     public private(set) var recentRequests: [RequestLogEntry] = []
     public private(set) var lastCheckpoint: ContextCheckpoint?
     public private(set) var lastCheckpointAt: Date?
+    /// The last prompt-reuse decision the server logged, and when we saw it.
+    public private(set) var lastReuse: SlotReuse?
+    public private(set) var lastReuseAt: Date?
     /// Exchanges seen through the proxy, oldest first. Empty unless the proxy is running.
     public private(set) var exchanges: [ProxiedExchange] = []
 
@@ -108,6 +111,14 @@ public final class OllamaMonitor {
               limit > 0
         else { return nil }
         return ContextFill(used: checkpoint.tokens, limit: limit)
+    }
+
+    /// The last prompt-reuse decision, if it is recent enough to be about what is running now.
+    /// The log line has no request id, so recency is the only link there is — and a stale figure
+    /// attributed to the wrong request would be worse than showing nothing.
+    public func promptReuse(now: Date = .now) -> SlotReuse? {
+        guard let lastReuse, let at = lastReuseAt, now.timeIntervalSince(at) < 60 else { return nil }
+        return lastReuse
     }
 
     /// Ordered by severity, worst first. At most one is ever shown; the rest are counted.
@@ -227,6 +238,9 @@ public final class OllamaMonitor {
         case .checkpoint(let checkpoint):
             lastCheckpoint = checkpoint
             lastCheckpointAt = now
+        case .slotReuse(let reuse):
+            lastReuse = reuse
+            lastReuseAt = now
         }
     }
 

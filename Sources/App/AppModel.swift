@@ -261,10 +261,13 @@ final class AppModel {
         let tint: Color
         let meta: [String]
         let contextFill: OllamaMonitor.ContextFill?
+        /// How much of the prompt the server reused. Nil when the log has not said recently.
+        let reuse: SlotReuse?
     }
 
     func activity(now: Date = .now) -> Activity? {
         let fill = monitor.contextFill(now: now)
+        let reuse = monitor.promptReuse(now: now)
         let active = monitor.activeExchange
 
         // A reasoning model produces nothing but thinking for tens of seconds. Showing speed there
@@ -275,7 +278,8 @@ final class AppModel {
                 headline: Format.elapsed(now.timeIntervalSince(active.startedAt)),
                 tint: Panel.Palette.reasoning,
                 meta: meta(active: active, includeRate: true),
-                contextFill: fill
+                contextFill: fill,
+                reuse: reuse
             )
         }
 
@@ -285,7 +289,8 @@ final class AppModel {
             headline: Format.rate(throughput.tokensPerSecond),
             tint: Panel.Palette.generating,
             meta: meta(active: active, includeRate: false),
-            contextFill: fill
+            contextFill: fill,
+            reuse: reuse
         )
     }
 

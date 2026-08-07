@@ -8,6 +8,31 @@ public enum LogEvent: Sendable, Equatable {
     case timing(SlotTiming)
     case request(RequestLogEntry)
     case checkpoint(ContextCheckpoint)
+    case slotReuse(SlotReuse)
+}
+
+/// `slot get_availabl` — how much of the prompt the server could reuse from the slot's KV cache
+/// instead of evaluating again.
+///
+/// This is the answer to "why is the same agent instant one minute and a minute slow the next".
+/// Nothing else in the stack reports it, and for agent runs it is the single most expensive thing
+/// you cannot see.
+public struct SlotReuse: Sendable, Equatable {
+    public let slotID: Int
+    /// Longest-common-prefix similarity between the new prompt and what the slot already holds.
+    public let similarity: Double
+    /// Below this the server takes a cold slot instead. It is a server-side setting, not ours.
+    public let threshold: Double
+
+    public init(slotID: Int, similarity: Double, threshold: Double) {
+        self.slotID = slotID
+        self.similarity = similarity
+        self.threshold = threshold
+    }
+
+    /// A near-perfect match means the prompt continues where the last one left off — the cheap
+    /// case. Anything much lower means the context is being evaluated from scratch.
+    public var isHit: Bool { similarity >= 0.9 }
 }
 
 /// `slot print_timing` — generation speed for one slot.

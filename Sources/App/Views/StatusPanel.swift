@@ -321,9 +321,12 @@ private struct ActivityBlock: View {
                         .monospacedDigit()
                 }
 
-                if !activity.meta.isEmpty {
+                if !activity.meta.isEmpty || activity.reuse != nil {
                     HStack(spacing: 8) {
                         ForEach(activity.meta, id: \.self) { Text($0) }
+                        if let reuse = activity.reuse {
+                            PromptReuseChip(reuse: reuse)
+                        }
                     }
                     .font(Panel.Typography.meta)
                     .foregroundStyle(.secondary)
@@ -353,6 +356,33 @@ private struct ActivityBlock: View {
     private var idleLabel: String {
         guard let ended = model.monitor.generationEndedAt else { return "idle" }
         return "idle · \(Format.age(now.timeIntervalSince(ended)))"
+    }
+}
+
+/// Whether the server could continue from the prompt it already had, or is evaluating the whole
+/// context again. For an agent looping over the same conversation this is the difference between
+/// an instant reply and a minute of waiting, and nothing else in the stack reports it.
+private struct PromptReuseChip: View {
+    let reuse: SlotReuse
+
+    var body: some View {
+        Text(label)
+            .font(Panel.Typography.chip)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(tint.opacity(0.16), in: .rect(cornerRadius: 4))
+            .foregroundStyle(tint)
+            .help(reuse.isHit
+                  ? "The server continued from the prompt it already had."
+                  : "The prompt did not match the cache — the context is being evaluated again.")
+    }
+
+    private var label: String {
+        reuse.isHit ? "cache \(Int((reuse.similarity * 100).rounded()))%" : "cache miss"
+    }
+
+    private var tint: Color {
+        reuse.isHit ? Panel.Palette.generating : Panel.Palette.warning
     }
 }
 

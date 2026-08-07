@@ -11,8 +11,23 @@ public enum LogLineParser {
     public static func parse(_ line: String) -> LogEvent? {
         if line.hasPrefix("slot print_timing") { return parseTiming(line) }
         if line.hasPrefix("slot create_check") { return parseCheckpoint(line) }
+        // The prefix is shared with the "- checking sim = …" line that precedes it, so here the
+        // regex is the real gate rather than an extraction step.
+        if line.hasPrefix("slot get_availabl") { return parseSlotReuse(line) }
         if line.hasPrefix("[GIN]") { return parseRequest(line) }
         return nil
+    }
+
+    // slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, f_sim_best = 0.976 (> 0.100 thold), f_keep = 1.000
+    private static func parseSlotReuse(_ line: String) -> LogEvent? {
+        let pattern = /id\s+(\d+)\s*\|.*?selected slot by LCP similarity,\s*f_sim_best\s*=\s*([\d.]+)\s*\(\s*>\s*([\d.]+)\s*thold/
+        guard let match = line.firstMatch(of: pattern),
+              let slotID = Int(match.output.1),
+              let similarity = Double(match.output.2),
+              let threshold = Double(match.output.3)
+        else { return nil }
+
+        return .slotReuse(SlotReuse(slotID: slotID, similarity: similarity, threshold: threshold))
     }
 
     // slot print_timing: id  0 | task 8510 | n_decoded =  116, tg =  5.69 t/s, tg_3s =  5.27 t/s

@@ -47,7 +47,8 @@ struct LogLineParserTests {
 
     /// llama.cpp truncates the operation name to a fixed width, so these are the real spellings.
     @Test(arguments: [
-        "slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, f_sim_best = 0.976",
+        // Shares the `get_availabl` prefix with the line we do parse — the regex is the real gate.
+        "slot get_availabl: id  0 | task -1 |  - checking sim = 0.976 (28297/28997) > 0.100",
         "slot init_sampler: id  0 | task 8985 | init sampler, took 3.49 ms, tokens: text = 28997",
         "slot launch_slot_: id  0 | task 8510 | processing task",
         "time=2026-08-06T12:17:53.000+03:00 level=INFO source=server.go:123 msg=\"starting\"",
@@ -55,6 +56,30 @@ struct LogLineParserTests {
     ])
     func ignoresLinesWithNothingToReport(line: String) {
         #expect(LogLineParser.parse(line) == nil)
+    }
+
+    @Test func parsesPromptReuse() throws {
+        let line = "slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, "
+            + "f_sim_best = 0.976 (> 0.100 thold), f_keep = 1.000"
+        guard case .slotReuse(let reuse)? = LogLineParser.parse(line) else {
+            Issue.record("expected a slot reuse event")
+            return
+        }
+        #expect(reuse.slotID == 0)
+        #expect(abs(reuse.similarity - 0.976) < 1e-9)
+        #expect(abs(reuse.threshold - 0.100) < 1e-9)
+        #expect(reuse.isHit)
+    }
+
+    @Test func aColdSlotIsNotAHit() throws {
+        let line = "slot get_availabl: id  1 | task -1 | selected slot by LCP similarity, "
+            + "f_sim_best = 0.142 (> 0.100 thold), f_keep = 1.000"
+        guard case .slotReuse(let reuse)? = LogLineParser.parse(line) else {
+            Issue.record("expected a slot reuse event")
+            return
+        }
+        #expect(reuse.slotID == 1)
+        #expect(!reuse.isHit)
     }
 
     @Test(arguments: [
@@ -80,9 +105,13 @@ struct LogLineParserTests {
 
         let timings = events.compactMap { if case .timing(let t) = $0 { t } else { nil } }
         let requests = events.compactMap { if case .request(let r) = $0 { r } else { nil } }
+        let reuses = events.compactMap { if case .slotReuse(let r) = $0 { r } else { nil } }
 
         #expect(!timings.isEmpty)
         #expect(!requests.isEmpty)
+        // The sample holds one real LCP line and its "checking sim" sibling; only one is an event.
+        #expect(reuses.count == 1)
+        #expect(reuses.allSatisfy { (0...1).contains($0.similarity) })
         // Nothing in a real sample should produce an absurd rate.
         #expect(timings.allSatisfy { $0.tokensPerSecond3s > 0 && $0.tokensPerSecond3s < 10_000 })
         #expect(requests.allSatisfy { $0.status >= 100 && $0.status < 600 })
