@@ -2,7 +2,15 @@
 
 A macOS menu bar app that shows what your local Ollama server is actually doing — which models are loaded, what they cost in memory, how fast they are generating, and what they are producing right now.
 
+<img src="docs/images/panel-generating.png" width="437" alt="The panel while a model generates: model and quantisation, memory, tokens per second, context fill, and the first lines of output">
+
 Status: menu bar app, headless CLI, request interception and history on disk all work (M1–M3).
+
+> The pictures below are rendered from the design mockup in [design/](design/), not screenshotted
+> from a running app — several states, like a failed request or a context about to overflow, are
+> not something you can stage on demand. [docs/DESIGN_BRIEF.md](docs/DESIGN_BRIEF.md) lists where
+> the shipped app deliberately differs; the short version is that the background is the system
+> material and the accents are the system's, not the mockup's hand-picked blue.
 
 ## Install
 
@@ -13,18 +21,60 @@ open -a OllamaBar
 ```
 
 The signature is ad-hoc, so Gatekeeper asks once on first launch. There is no notarized build yet —
-see [docs/TODO.md](docs/TODO.md).
+see [docs/TODO.md](docs/TODO.md). From Xcode instead: `tuist generate`, open
+`OllamaBar.xcworkspace`, Cmd+R.
 
-## The app, from Xcode
+## In the menu bar
 
-```bash
-brew install tuist
-tuist generate
-open OllamaBar.xcworkspace   # then Cmd+R
-```
+<img src="docs/images/menubar.png" width="663" alt="Six menu bar states: dim icon when the server is unreachable, brighter with no models, a dot when one is resident, a rate while generating, amber on a warning, red on an error">
 
-It appears in the menu bar with no Dock icon. The label stays quiet — an icon, plus a dot when a
-model is resident — and only shows a number while something is generating.
+There is no Dock icon, and the label stays quiet: an icon, a dot once a model is resident, and a
+number only while something is generating. Warnings and errors arrive as colour rather than text —
+they read from the corner of your eye and cost no width. The icon goes back to normal as soon as
+you open the panel, because by then the warning has been delivered. The rate is monospaced and
+always six characters, so the items next to it never shift.
+
+## The panel
+
+With a model loaded and nothing running, that is three blocks and a footer:
+
+<img src="docs/images/panel-idle.png" width="437" alt="The idle panel: one model row with size, quantisation, memory, device and context, a Generating row reading idle, the last request folded into one line, and total resident memory in the footer">
+
+Nothing holds space for later. Each block is there because its data is there and disappears with
+it — no placeholder rows with dashes. `Generating / idle` is the exception and stays put: gone
+entirely, it would leave you wondering whether the app is watching at all. Everything else the
+panel can show:
+
+<img src="docs/images/panel-states.png" width="880" alt="Six more panel states: server not responding, server up with nothing loaded, generating with interception off, thinking with a reasoning preview, a context-nearly-full warning, and a 500 out of memory error">
+
+## Seeing output
+
+Ollama offers no way to watch another client's stream, and its log carries metadata only. To see
+what a model is actually producing, turn on interception (Settings, or `--proxy` on the CLI) and
+point your client at that port instead of Ollama's.
+
+<img src="docs/images/window-output.png" width="689" alt="The output window: the model's text as it streams, with tabs for reasoning, prompt and tools, and rate, token count and client in the footer">
+
+The proxy is a byte-for-byte TCP relay: it never parses or re-encodes what it forwards. HTTP is
+reconstructed from a copy of the stream purely for display, so a bug there costs you visibility and
+nothing else. Transparency is checked by tests that compare a proxied response against the same
+request made directly.
+
+## Where the time went
+
+<img src="docs/images/window-history.png" width="749" alt="The history window: one row per request with time, model, client, the load/prompt/generation split, token counts and total; below, the selected request broken into a bar showing 78% of it was loading the model">
+
+Every request is recorded — time, model, client, tokens in and out, and the split between loading the
+model, reading the prompt and generating. The split is usually the answer to "why was that slow":
+a first request against a cold model spends most of its time loading it.
+
+## Settings
+
+<img src="docs/images/settings.png" width="549" alt="The settings window: the Ollama address with a reachability dot, an interception toggle showing the port to point your agent at, and a collapsed Advanced section">
+
+On the surface, only what you actually change: the address and interception. The log path, the poll
+interval, warning thresholds, retention and the theme all live under Advanced with working
+defaults. There is no Apply button — settings take effect when the field loses focus.
 
 ## The CLI
 
@@ -36,17 +86,6 @@ swift run ollama-bar-cli --once         # one snapshot
 swift run ollama-bar-cli --proxy 11435  # and watch what passes through
 swift run ollama-bar-cli --proxy 11435 --record   # ...and write it to the app's history
 ```
-
-## Seeing output
-
-Ollama offers no way to watch another client's stream, and its log carries metadata only. To see
-what a model is actually producing, turn on interception (Settings, or `--proxy` on the CLI) and
-point your client at that port instead of Ollama's.
-
-The proxy is a byte-for-byte TCP relay: it never parses or re-encodes what it forwards. HTTP is
-reconstructed from a copy of the stream purely for display, so a bug there costs you visibility and
-nothing else. Transparency is checked by tests that compare a proxied response against the same
-request made directly.
 
 ```
 ollama-bar  http://127.0.0.1:11434
@@ -73,10 +112,12 @@ front end. Parsers are tested against samples recorded from a live server in `Fi
 Settings live in `~/.ollamabar/settings.json`, history in `~/.ollamabar/history` — one JSONL index
 per day, with the prompt and output texts as separate files under `bodies/`. History older than a
 week is deleted automatically; the window is configurable under Settings → Advanced. Both are plain
-files you can read, edit or delete by hand. `scripts/make-icon.swift` redraws the app icon.
+files you can read, edit or delete by hand.
 
 The logic builds as a plain SPM package, so `swift test` runs without generating an Xcode project;
 Tuist exists only for the `.app` bundle. Both read the same source directories.
+`scripts/make-icon.swift` redraws the app icon, `scripts/render-design.swift` re-renders the images
+on this page from the mockup.
 
 See [docs/PLAN.md](docs/PLAN.md) for the architecture and roadmap, and
 [docs/TODO.md](docs/TODO.md) for what is still missing.
