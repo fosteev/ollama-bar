@@ -225,6 +225,33 @@ struct HistoryStoreTests {
         #expect(manager.fileExists(atPath: directory.appending(path: "bodies/whatever").path()))
     }
 
+    /// Retention has to work for an app left open for weeks with no traffic — neither a restart
+    /// nor a write can be relied on to trigger it.
+    @Test func theSweepPrunesWithoutAnyTrafficOrRestart() async throws {
+        let directory = Self.tempDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = HistoryStore(
+            directory: directory,
+            retentionDays: 90,
+            sweepInterval: 0.2,
+            calendar: Self.calendar
+        )
+        store.record([Self.exchange(startedAt: Self.day.addingTimeInterval(-30 * 86_400))])
+        store.flush()
+
+        // Still there: 30 days is well inside a 90-day window, so the prune in `init` kept it.
+        let stale = directory.appending(path: "2026-07-08.jsonl")
+        #expect(FileManager.default.fileExists(atPath: stale.path()))
+
+        // Now it ages out — with nothing written and nothing restarted, only the timer can notice.
+        store.setRetention(days: 7)
+        try await Task.sleep(for: .milliseconds(700))
+        store.flush()
+
+        #expect(!FileManager.default.fileExists(atPath: stale.path()))
+    }
+
     @Test func missingDirectoryReadsAsEmpty() async {
         let store = Self.store(at: Self.tempDirectory())
         #expect(await store.recent(limit: 10, days: 7).isEmpty)
@@ -286,8 +313,14 @@ struct HistoryStoreTests {
     /// 2026-08-07 10:00 UTC.
     private static let day = Date(timeIntervalSince1970: 1_786_096_800)
 
+    /// Sweep disabled: every other test wants pruning to happen only when it says so.
     private static func store(at directory: URL, retentionDays: Int = 14) -> HistoryStore {
-        HistoryStore(directory: directory, retentionDays: retentionDays, calendar: calendar)
+        HistoryStore(
+            directory: directory,
+            retentionDays: retentionDays,
+            sweepInterval: 0,
+            calendar: calendar
+        )
     }
 
     private static func tempDirectory() -> URL {

@@ -11,12 +11,16 @@ import OllamaBarCore
 public final class HistoryStore: ExchangeRecorder, @unchecked Sendable {
     public static let defaultDirectory = URL(filePath: NSHomeDirectory())
         .appending(path: ".ollamabar/history")
-    public static let defaultRetentionDays = 14
+    public static let defaultRetentionDays = 7
+    /// How often the sweep runs. Well under the retention window, so a day file is deleted within
+    /// hours of aging out rather than whenever something happens to be written.
+    public static let defaultSweepInterval: TimeInterval = 6 * 3600
 
     private let files: HistoryFiles
     /// Write-queue state, like the descriptor below.
     private var retentionDays: Int
     private let writeQueue = DispatchQueue(label: "ollamabar.history.write", qos: .utility)
+    private var sweep: DispatchSourceTimer?
     /// Reads must not queue behind a write, and parsing a day must not stall a record.
     private let readQueue = DispatchQueue(
         label: "ollamabar.history.read",
@@ -31,15 +35,33 @@ public final class HistoryStore: ExchangeRecorder, @unchecked Sendable {
     public init(
         directory: URL = HistoryStore.defaultDirectory,
         retentionDays: Int = HistoryStore.defaultRetentionDays,
+        sweepInterval: TimeInterval = HistoryStore.defaultSweepInterval,
         calendar: Calendar = .current
     ) {
         self.files = HistoryFiles(root: directory, calendar: calendar)
         self.retentionDays = max(1, retentionDays)
         prune()
+        startSweeping(every: sweepInterval)
     }
 
     deinit {
+        sweep?.cancel()
         if let descriptor { close(descriptor) }
+    }
+
+    /// Retention has to hold for an app that stays open for weeks with nothing passing through it.
+    /// Pruning on startup and on day rollover covers neither case: the first needs a restart, the
+    /// second needs traffic. A timer needs neither.
+    private func startSweeping(every interval: TimeInterval) {
+        guard interval > 0 else { return }
+        let timer = DispatchSource.makeTimerSource(queue: writeQueue)
+        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .seconds(60))
+        timer.setEventHandler { [weak self] in
+            guard let self else { return }
+            files.prune(before: cutoffKey(.now))
+        }
+        timer.resume()
+        sweep = timer
     }
 
     // MARK: - Writing

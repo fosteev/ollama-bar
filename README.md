@@ -71,8 +71,9 @@ swift test
 front end. Parsers are tested against samples recorded from a live server in `Fixtures/`.
 
 Settings live in `~/.ollamabar/settings.json`, history in `~/.ollamabar/history` — one JSONL index
-per day, with the prompt and output texts as separate files under `bodies/`. Both are plain files
-you can read, edit or delete by hand. `scripts/make-icon.swift` redraws the app icon.
+per day, with the prompt and output texts as separate files under `bodies/`. History older than a
+week is deleted automatically; the window is configurable under Settings → Advanced. Both are plain
+files you can read, edit or delete by hand. `scripts/make-icon.swift` redraws the app icon.
 
 The logic builds as a plain SPM package, so `swift test` runs without generating an Xcode project;
 Tuist exists only for the `.app` bundle. Both read the same source directories.
