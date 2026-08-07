@@ -11,7 +11,8 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-15
+    # Xcode 26, for the toolchain reason spelled out in ci.yml.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 

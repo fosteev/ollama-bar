@@ -1,12 +1,16 @@
 name: CI
 
 on:
+  # Not tags: those are releases, and the release workflow runs the same tests before it builds.
   push:
+    branches: [main]
   pull_request:
 
 jobs:
   test:
-    runs-on: macos-15
+    # Package.swift declares swift-tools-version 6.2, which needs Xcode 26. The macos-15 image
+    # ships Xcode 16 and cannot even read the manifest, let alone build it.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v4
 
