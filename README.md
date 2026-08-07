@@ -1,10 +1,12 @@
+<img src="Sources/App/Resources/Assets.xcassets/AppIcon.appiconset/icon-256.png" width="104" align="right" alt="">
+
 # ollama-bar
 
 A macOS menu bar app that shows what your local Ollama server is actually doing — which models are loaded, what they cost in memory, how fast they are generating, and what they are producing right now.
 
-<img src="docs/images/panel-generating.png" width="437" alt="The panel while a model generates: model and quantisation, memory, tokens per second, context fill, and the first lines of output">
-
 Status: menu bar app, headless CLI, request interception and history on disk all work (M1–M3).
+
+<img src="docs/images/panel-generating.png" width="437" alt="The panel while a model generates: model and quantisation, memory, tokens per second, context fill, and the first lines of output">
 
 > The pictures below are rendered from the design mockup in [design/](design/), not screenshotted
 > from a running app — several states, like a failed request or a context about to overflow, are
