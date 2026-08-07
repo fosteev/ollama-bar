@@ -2,7 +2,10 @@
 # can point it at the archive it just built instead of leaving a checksum to paste by hand:
 #
 #   brew tap fosteev/ollama-bar https://github.com/fosteev/ollama-bar
+#   brew trust --cask fosteev/ollama-bar/ollama-bar
 #   brew install --cask ollama-bar
+#
+# The trust line is Homebrew 6 refusing to load casks from unofficial taps until told to.
 #
 # `version` and `sha256` below are rewritten by .github/workflows/release.yml on every tag.
 cask "ollama-bar" do

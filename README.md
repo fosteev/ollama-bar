@@ -16,12 +16,17 @@ Status: menu bar app, headless CLI, request interception and history on disk all
 
 ```bash
 brew tap fosteev/ollama-bar https://github.com/fosteev/ollama-bar
+brew trust --cask fosteev/ollama-bar/ollama-bar
 brew install --cask ollama-bar
 ```
 
-The tap is this repository, so there is no second one to keep in sync. The signature is ad-hoc —
-there is no Developer ID to notarize with yet — so macOS asks once on first launch: System Settings
-→ Privacy & Security → Open Anyway. See [docs/TODO.md](docs/TODO.md).
+The tap is this repository, so there is no second one to keep in sync. Homebrew 6 will not load a
+cask from an unofficial tap until you say so, which is the `brew trust` line — it is a one-off, and
+it goes away if this ever lands in homebrew/cask.
+
+Then macOS gets its turn: the signature is ad-hoc, because there is no Developer ID to notarize
+with yet, so the first launch needs System Settings → Privacy & Security → Open Anyway. Both of
+those are on the list in [docs/TODO.md](docs/TODO.md).
 
 Or build it yourself:
 

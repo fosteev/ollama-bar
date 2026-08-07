@@ -62,11 +62,13 @@ jobs:
           cat > "$RUNNER_TEMP/notes.md" <<'NOTES'
           ```
           brew tap fosteev/ollama-bar https://github.com/fosteev/ollama-bar
+          brew trust --cask fosteev/ollama-bar/ollama-bar
           brew install --cask ollama-bar
           ```
 
-          The signature is ad-hoc — there is no Developer ID to notarize with yet, so macOS asks
-          once on first launch: System Settings → Privacy & Security → Open Anyway.
+          Homebrew 6 will not load a cask from an unofficial tap until you trust it, hence the
+          middle line. The signature is ad-hoc — there is no Developer ID to notarize with yet — so
+          macOS asks once on first launch: System Settings → Privacy & Security → Open Anyway.
           NOTES
           gh release create "$GITHUB_REF_NAME" "$ZIP" \
             --title "$GITHUB_REF_NAME" \
