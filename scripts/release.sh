@@ -32,22 +32,25 @@ fi
 CURRENT=$(sed -n 's/.*"MARKETING_VERSION": "\([^"]*\)".*/\1/p' Project.swift)
 BUILD=$(sed -n 's/.*"CURRENT_PROJECT_VERSION": "\([^"]*\)".*/\1/p' Project.swift)
 
+# Usually this bumps the version. Not always: the first release of a version the project already
+# declares has nothing to bump, and the tag it does not have yet is the whole point. Reissuing is
+# still refused above — that check is on the tag, which is the thing people actually download.
 if [ "$CURRENT" = "$VERSION" ]; then
-    echo "Project.swift is already at $VERSION" >&2
-    exit 1
+    echo "==> $VERSION (build $BUILD), already in Project.swift — tagging as is"
+else
+    # The build number only ever goes up. Nothing reads it yet, but Sparkle will, and it is the one
+    # number you cannot fix after the fact — an update that appears to go backwards is not offered.
+    sed -i '' -E \
+        -e "s/(\"MARKETING_VERSION\": \")[^\"]*/\1$VERSION/" \
+        -e "s/(\"CURRENT_PROJECT_VERSION\": \")[^\"]*/\1$((BUILD + 1))/" \
+        Project.swift
+
+    echo "==> $CURRENT -> $VERSION (build $BUILD -> $((BUILD + 1)))"
+
+    git add Project.swift
+    git commit -q -m "Release $TAG"
 fi
 
-# The build number only ever goes up. Nothing reads it yet, but Sparkle will, and it is the one
-# number you cannot fix after the fact — an update that appears to go backwards is not offered.
-sed -i '' -E \
-    -e "s/(\"MARKETING_VERSION\": \")[^\"]*/\1$VERSION/" \
-    -e "s/(\"CURRENT_PROJECT_VERSION\": \")[^\"]*/\1$((BUILD + 1))/" \
-    Project.swift
-
-echo "==> $CURRENT -> $VERSION (build $BUILD -> $((BUILD + 1)))"
-
-git add Project.swift
-git commit -q -m "Release $TAG"
 git tag -a "$TAG" -m "$TAG"
 
 echo "==> pushing"
