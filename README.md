@@ -34,10 +34,8 @@ button older instructions send you to is not offered for this case. Clearing the
 on the download is what is left. You will need it again after every upgrade, until there is a
 notarized build — see [docs/TODO.md](docs/TODO.md).
 
-If that trade is not one you want to make, build it yourself instead: a local build is never
-quarantined, because it was never downloaded.
-
-Or build it yourself:
+If that is not a trade you want to make, build it instead — a local build is never quarantined,
+because it was never downloaded:
 
 ```bash
 brew install tuist
