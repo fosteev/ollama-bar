@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<style>
+  body { margin:0; background:#e8e6e3; }
+  a { color:#0a63d1; text-decoration:none; }
+  a:hover { color:#0848a0; text-decoration:underline; }
+  @keyframes pulse { 0%,100% { opacity:.25 } 50% { opacity:1 } }
+</style>
+</helmet>
+
+<section id="turn1" style="display:flex;flex-direction:column;gap:28px;padding:56px;width:1316px;box-sizing:border-box;font:13px/1.4 -apple-system,'SF Pro Text','Helvetica Neue',Helvetica,sans-serif;color:#111;">
+
+  <div id="1a" style="display:flex;flex-direction:column;gap:36px;">
+
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.08em;background:#111;color:#fff;padding:5px 8px;border-radius:4px;">1A</span>
+      <h1 style="margin:0;font:600 22px/1.2 -apple-system,'SF Pro Display',sans-serif;letter-spacing:-0.01em;">ollama-bar — панель монитора</h1>
+      <span style="color:rgba(0,0,0,.5);font-size:13px;">340 pt · macOS 15 · MenuBarExtra(.window)</span>
+    </div>
+
+    <!-- PRIORITY LOGIC -->
+    <div style="display:grid;grid-template-columns:repeat(4,300px);gap:1px;background:rgba(0,0,0,.14);border:1px solid rgba(0,0,0,.14);border-radius:8px;overflow:hidden;width:1204px;">
+      <div style="background:#fbfaf9;padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">ВСЕГДА</div>
+        <div style="font-weight:600;font-size:14px;">Инвентарь и память</div>
+        <div style="color:rgba(0,0,0,.6);font-size:12px;text-wrap:pretty;">Строка на модель + суммарный резидент в подвале. Это ответ на «что вообще занимает мою память прямо сейчас» — вопрос, ради которого панель открывают чаще всего. Никогда не сворачивается.</div>
+      </div>
+      <div style="background:#fbfaf9;padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">ПО СОБЫТИЮ</div>
+        <div style="font-weight:600;font-size:14px;">Активность · Предупреждения</div>
+        <div style="color:rgba(0,0,0,.6);font-size:12px;text-wrap:pretty;">Блок активности существует только во время генерации; в простое сжимается до одной строки «Idle». Предупреждение — баннер над всем содержимым, вытесняет внимание, но не другие блоки.</div>
+      </div>
+      <div style="background:#fbfaf9;padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">РАСКРЫВАЕТСЯ</div>
+        <div style="font-weight:600;font-size:14px;">Разбивка запроса · Вывод</div>
+        <div style="color:rgba(0,0,0,.6);font-size:12px;text-wrap:pretty;">Последний запрос — одна строка-итог, по клику разворачивается в 4 числа. Живой вывод — две строки хвоста, чтобы было видно движение. Состояние раскрытия запоминается.</div>
+      </div>
+      <div style="background:#fbfaf9;padding:16px;display:flex;flex-direction:column;gap:8px;">
+        <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">ОТДЕЛЬНОЕ ОКНО</div>
+        <div style="font-weight:600;font-size:14px;">Полный вывод · История</div>
+        <div style="color:rgba(0,0,0,.6);font-size:12px;text-wrap:pretty;">Всё, что требует чтения, а не взгляда. Панель закрывается при потере фокуса — читать в ней длинный текст физически нельзя, поэтому чтение живёт в обычном окне.</div>
+      </div>
+    </div>
+
+    <div style="max-width:1204px;color:rgba(0,0,0,.62);font-size:13px;text-wrap:pretty;">
+      <b style="color:#111;">Правило.</b> Панель в простое — три блока и подвал, ~150 pt. Каждый следующий блок появляется только потому, что появились данные, и исчезает вместе с ними. Ничто не занимает место «на всякий случай»: пустых плашек с прочерками в панели нет. Максимум, до которого панель может вырасти сама, — предупреждение + активность + вывод + развёрнутый запрос = 470 pt.
+    </div>
+
+    <!-- PANEL STATES -->
+    <div style="display:flex;flex-wrap:wrap;gap:44px 40px;align-items:flex-start;">
+
+      <!-- 1 unreachable -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">СОСТОЯНИЕ 1</div>
+          <div style="font-weight:600;">Сервер не отвечает</div>
+        </div>
+        <div style="width:340px;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden;">
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:12px;display:flex;flex-direction:column;gap:4px;">
+            <div style="display:flex;align-items:center;gap:6px;color:#a8500a;font-weight:500;">
+              <span style="width:11px;height:11px;border-radius:50%;background:#c26a00;display:inline-block;"></span>
+              Not responding
+            </div>
+            <div style="font-size:11px;color:rgba(0,0,0,.5);">Connection refused. Ollama isn’t running — start it with <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;">ollama serve</span>.</div>
+            <div style="font-size:11px;color:rgba(0,0,0,.35);font-family:ui-monospace,'SF Mono',Menlo,monospace;">last seen 3m ago · retrying every 2s</div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(0,0,0,.4);">Retry now</span>
+            <span style="display:flex;gap:12px;color:#0a63d1;"><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">Ни инвентаря, ни активности — данных нет, а прочерки врут. Причина отказа дословно из ошибки сокета.</div>
+      </div>
+
+      <!-- 2 no models -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">СОСТОЯНИЕ 2</div>
+          <div style="font-weight:600;">Сервер жив, моделей нет</div>
+        </div>
+        <div style="width:340px;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden;">
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:14px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="color:rgba(0,0,0,.55);">No models loaded</div>
+            <div style="font-size:11px;color:rgba(0,0,0,.35);">Nothing is holding memory. The next request loads a model.</div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(0,0,0,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">12 installed</span>
+            <span style="display:flex;gap:12px;color:#0a63d1;"><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">Самая короткая панель, ~96 pt. Счётчик установленных моделей — единственный факт, который здесь ещё уместен.</div>
+      </div>
+
+      <!-- 3 idle -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">СОСТОЯНИЕ 3 · БАЗОВОЕ</div>
+          <div style="font-weight:600;">Модель загружена, простой</div>
+        </div>
+        <div style="width:340px;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden;">
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">qwen3.5-27b-32k:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);white-space:nowrap;">evicts in 4:12</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>27.8B</span><span>Q4_K_M</span><span>17.0 GiB</span><span>GPU</span><span>ctx 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px;display:flex;align-items:center;justify-content:space-between;font-size:12px;">
+            <span style="color:rgba(0,0,0,.55);">Generating</span>
+            <span style="color:rgba(0,0,0,.32);font-family:ui-monospace,'SF Mono',Menlo,monospace;">idle · 2m</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px;display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(0,0,0,.5);">
+            <span style="color:rgba(0,0,0,.3);">▸</span>
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;">14:22:07</span>
+            <span style="color:rgba(0,0,0,.75);">/api/chat</span>
+            <span style="margin-left:auto;font-family:ui-monospace,'SF Mono',Menlo,monospace;">12→8 · 10.8 s</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(0,0,0,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">17.0 GiB resident</span>
+            <span style="display:flex;gap:12px;color:#0a63d1;"><span>History…</span><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">~168 pt. «Generating / idle» остаётся строкой: пропадая совсем, она заставляла бы гадать, следит ли приложение вообще. Последний запрос свёрнут в одну строку.</div>
+      </div>
+
+      <!-- 4 generating, no intercept -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">СОСТОЯНИЕ 4</div>
+          <div style="font-weight:600;">Генерация, перехват выключен</div>
+        </div>
+        <div style="width:340px;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden;">
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">qwen3.5-27b-32k:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">evicts in 4:58</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>27.8B</span><span>Q4_K_M</span><span>17.0 GiB</span><span>GPU</span><span>ctx 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:9px 12px;display:flex;flex-direction:column;gap:5px;background:rgba(10,99,209,.05);">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="width:6px;height:6px;border-radius:50%;background:#0a63d1;align-self:center;animation:pulse 1.4s ease-in-out infinite;"></span>
+              <span style="font-size:12px;color:rgba(0,0,0,.6);">Generating</span>
+              <span style="margin-left:auto;font:600 17px/1 ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;">5.9 t/s</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>slot 0</span><span>codex-cli/0.42</span><span>0:07</span><span>41 tok</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px;font-size:11px;color:rgba(0,0,0,.4);display:flex;justify-content:space-between;align-items:center;">
+            <span>Output not captured</span>
+            <span style="color:#0a63d1;">Turn on interception…</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(0,0,0,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">17.0 GiB resident</span>
+            <span style="display:flex;gap:12px;color:#0a63d1;"><span>History…</span><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">Скорость — единственное крупное число в приложении: 17 pt, моноширинное, tabular. Строка «Output not captured» показывается, только пока идёт генерация, — это момент, когда перехват нужен.</div>
+      </div>
+
+      <!-- 5 generating + intercept -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">СОСТОЯНИЕ 5 · МАКСИМУМ</div>
+          <div style="font-weight:600;">Генерация, перехват включён</div>
+        </div>
+        <div style="width:340px;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden;">
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">qwen3.5-27b-32k:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">evicts in 4:58</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>27.8B</span><span>Q4_K_M</span><span>17.0 GiB</span><span>GPU</span><span>ctx 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:9px 12px;display:flex;flex-direction:column;gap:5px;background:rgba(10,99,209,.05);">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="width:6px;height:6px;border-radius:50%;background:#0a63d1;align-self:center;animation:pulse 1.4s ease-in-out infinite;"></span>
+              <span style="font-size:12px;color:rgba(0,0,0,.6);">Generating</span>
+              <span style="margin-left:auto;font:600 17px/1 ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;">5.9 t/s</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>slot 0</span><span>codex-cli/0.42</span><span>0:31</span><span>184 tok</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>ctx</span>
+              <span style="flex:1;height:3px;border-radius:2px;background:rgba(0,0,0,.12);overflow:hidden;"><span style="display:block;width:31%;height:100%;background:rgba(0,0,0,.4);"></span></span>
+              <span>9.9K / 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:5px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(0,0,0,.45);">
+              <span style="color:rgba(0,0,0,.3);">▾</span><span>Output</span>
+              <span style="margin-left:auto;color:#0a63d1;">Open window ⌘O</span>
+            </div>
+            <div style="font:11px/1.45 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.78);max-height:32px;overflow:hidden;">…so the tailer keeps the last offset and re-opens the file when the inode changes, which is what happens on log rot</div>
+            <div style="display:flex;gap:5px;flex-wrap:wrap;">
+              <span style="font:10px/1 ui-monospace,'SF Mono',Menlo,monospace;padding:3px 6px;border-radius:4px;background:rgba(0,0,0,.07);color:rgba(0,0,0,.6);">read_file ×3</span>
+              <span style="font:10px/1 ui-monospace,'SF Mono',Menlo,monospace;padding:3px 6px;border-radius:4px;background:rgba(0,0,0,.07);color:rgba(0,0,0,.6);">apply_patch</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(0,0,0,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">17.0 GiB resident</span>
+            <span style="display:flex;gap:12px;color:#0a63d1;"><span>History…</span><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">Вывод — ровно два строки хвоста (32 pt, обрезка сверху): достаточно, чтобы видеть движение, мало, чтобы захотеть читать. Полоса контекста заменяет числовой промпт-блок.</div>
+      </div>
+
+      <!-- 6 thinking -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">СОСТОЯНИЕ 6</div>
+          <div style="font-weight:600;">Модель думает</div>
+        </div>
+        <div style="width:340px;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden;">
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">qwen3.5-27b-32k:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">evicts in 5:00</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>27.8B</span><span>Q4_K_M</span><span>17.0 GiB</span><span>GPU</span><span>ctx 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:9px 12px;display:flex;flex-direction:column;gap:5px;background:rgba(88,86,214,.06);">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="width:6px;height:6px;border-radius:50%;background:#5b57c9;align-self:center;animation:pulse 1.4s ease-in-out infinite;"></span>
+              <span style="font-size:12px;color:rgba(0,0,0,.6);">Thinking</span>
+              <span style="margin-left:auto;font:600 17px/1 ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;">0:42</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>slot 0</span><span>codex-cli/0.42</span><span>7.4 t/s</span><span>312 tok</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:5px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(0,0,0,.45);">
+              <span style="color:rgba(0,0,0,.3);">▾</span><span>Reasoning</span>
+              <span style="margin-left:auto;color:#0a63d1;">Open window ⌘O</span>
+            </div>
+            <div style="font:italic 11px/1.45 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.5);max-height:32px;overflow:hidden;">…if the deadline already passed Ollama still lists it, so the countdown has to clamp at zero rather than</div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(0,0,0,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">17.0 GiB resident</span>
+            <span style="display:flex;gap:12px;color:#0a63d1;"><span>History…</span><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">Крупное число здесь — не скорость, а <b>время обдумывания</b>: именно оно отвечает на вопрос «оно вообще живое?». Курсив и фиолетовый оттенок отличают рассуждение от ответа.</div>
+      </div>
+
+      <!-- 7 warning -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">СОСТОЯНИЕ 7</div>
+          <div style="font-weight:600;">Предупреждение</div>
+        </div>
+        <div style="width:340px;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden;">
+          <div style="padding:9px 12px;background:rgba(255,149,0,.16);display:flex;gap:8px;">
+            <span style="width:11px;height:11px;border-radius:50%;background:#c26a00;flex:none;margin-top:2px;"></span>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <div style="font-size:12px;font-weight:500;color:#7a4300;">Context nearly full — 30.1K of 32K</div>
+              <div style="font-size:11px;color:rgba(0,0,0,.55);text-wrap:pretty;">The server will silently drop the oldest tokens. Your agent forgets its own instructions first.</div>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">qwen3.5-27b-32k:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">evicts in 4:12</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>27.8B</span><span>Q4_K_M</span><span>17.0 GiB</span><span>GPU 62%</span><span>ctx 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:9px 12px;display:flex;flex-direction:column;gap:5px;background:rgba(10,99,209,.05);">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="width:6px;height:6px;border-radius:50%;background:#0a63d1;align-self:center;"></span>
+              <span style="font-size:12px;color:rgba(0,0,0,.6);">Generating</span>
+              <span style="margin-left:auto;font:600 17px/1 ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;">2.1 t/s</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:#a8500a;">
+              <span>ctx</span>
+              <span style="flex:1;height:3px;border-radius:2px;background:rgba(0,0,0,.12);overflow:hidden;"><span style="display:block;width:94%;height:100%;background:#c26a00;"></span></span>
+              <span>30.1K / 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(0,0,0,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">17.0 GiB resident</span>
+            <span style="display:flex;gap:12px;color:#0a63d1;"><span>History…</span><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">Баннер стоит <b>над</b> заголовком — единственный элемент, которому позволено быть выше названия приложения. Одновременно живёт не более одного; остальные складываются в «2 more…».</div>
+      </div>
+
+      <!-- 8 error -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">СОСТОЯНИЕ 8</div>
+          <div style="font-weight:600;">Ошибка запроса</div>
+        </div>
+        <div style="width:340px;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);overflow:hidden;">
+          <div style="padding:9px 12px;background:rgba(215,0,21,.12);display:flex;gap:8px;">
+            <span style="width:11px;height:11px;border-radius:50%;background:#c2001a;flex:none;margin-top:2px;"></span>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <div style="font-size:12px;font-weight:500;color:#8f0012;">500 from /api/chat</div>
+              <div style="font:11px/1.35 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.6);text-wrap:pretty;">model requires more system memory (18.3 GiB) than is available (12.1 GiB)</div>
+              <div style="font-size:11px;color:rgba(0,0,0,.45);">14:31:02 · codex-cli/0.42 · <span style="color:#0a63d1;">Copy</span></div>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">llama3.3-70b:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:#a8500a;">eviction due</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>70.6B</span><span>Q4_K_M</span><span>39.8 GiB</span><span>GPU 62%</span><span>ctx 8K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px;display:flex;align-items:center;justify-content:space-between;font-size:12px;">
+            <span style="color:rgba(0,0,0,.55);">Generating</span>
+            <span style="color:rgba(0,0,0,.32);font-family:ui-monospace,'SF Mono',Menlo,monospace;">idle</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px;display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(0,0,0,.5);">
+            <span style="color:rgba(0,0,0,.3);">▸</span>
+            <span style="font-family:ui-monospace,'SF Mono',Menlo,monospace;">14:31:02</span>
+            <span style="color:#8f0012;">/api/chat</span>
+            <span style="margin-left:auto;font-family:ui-monospace,'SF Mono',Menlo,monospace;color:#8f0012;">500 · 0.4 s</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(0,0,0,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">39.8 GiB resident</span>
+            <span style="display:flex;gap:12px;color:#0a63d1;"><span>History…</span><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">Текст ошибки — дословно от сервера, моноширинным: его копируют в issue. Баннер держится 60 с после последней ошибки, потом уезжает в историю.</div>
+      </div>
+
+      <!-- context menu / unload -->
+      <div style="display:flex;flex-direction:column;gap:10px;width:340px;">
+        <div style="display:flex;flex-direction:column;gap:2px;">
+          <div style="font:600 11px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.06em;color:rgba(0,0,0,.45);">ДЕЙСТВИЕ</div>
+          <div style="font-weight:600;">Контекстное меню строки модели</div>
+        </div>
+        <div style="width:340px;position:relative;border-radius:10px;background:#f6f5f4;border:0.5px solid rgba(0,0,0,.16);box-shadow:0 10px 28px rgba(0,0,0,.16);padding-bottom:96px;overflow:hidden;">
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(0,0,0,.09);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;background:rgba(0,0,0,.05);">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">qwen3.5-27b-32k:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">evicts in 4:12</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.45);">
+              <span>27.8B</span><span>Q4_K_M</span><span>17.0 GiB</span><span>GPU</span><span>ctx 32K</span>
+            </div>
+          </div>
+          <div style="position:absolute;left:64px;top:78px;width:220px;border-radius:6px;background:#fbfaf9;border:0.5px solid rgba(0,0,0,.14);box-shadow:0 12px 28px rgba(0,0,0,.22);padding:4px;font-size:13px;">
+            <div style="padding:4px 8px;border-radius:4px;background:#0a63d1;color:#fff;">Unload now</div>
+            <div style="padding:4px 8px;color:rgba(0,0,0,.85);">Keep loaded until quit</div>
+            <div style="height:1px;background:rgba(0,0,0,.09);margin:4px 8px;"></div>
+            <div style="padding:4px 8px;color:rgba(0,0,0,.85);">Copy name</div>
+            <div style="padding:4px 8px;color:rgba(0,0,0,.85);">Show requests for this model…</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);text-wrap:pretty;">Единственное разрушительное действие приложения не должно жить в постоянно видимой кнопке рядом с таймером — правый клик по строке, плюс Unload по ⌫ при выделенной строке.</div>
+      </div>
+
+    </div>
+
+    <!-- MENU BAR ITEM -->
+    <div style="display:flex;flex-direction:column;gap:14px;max-width:1204px;">
+      <h2 style="margin:24px 0 0;font:600 17px/1.2 -apple-system,sans-serif;">Элемент в строке меню</h2>
+      <div style="color:rgba(0,0,0,.62);font-size:13px;max-width:760px;text-wrap:pretty;">Принцип «текст только когда что-то происходит» работает — оставляем. Правки две: точка простоя приглушается до 25% через 30 с (модель загружена — это не новость), а предупреждение получает не текст, а <b>цвет иконки</b>. Ширина элемента меняется ровно один раз за запрос — при появлении и исчезновении цифры; сама цифра моноширинная и всегда 6 знаков (<span style="font-family:ui-monospace,monospace;">␣5.9 t/s</span> → <span style="font-family:ui-monospace,monospace;">12.4 t/s</span>), поэтому соседи не дёргаются.</div>
+      <div style="display:flex;flex-wrap:wrap;gap:16px;">
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:14px;height:26px;padding:0 12px;border-radius:7px;background:linear-gradient(#3c3c40,#333338);">
+            <span style="width:15px;height:13px;border-radius:3px;border:1.5px solid rgba(255,255,255,.35);"></span>
+          </div>
+          <div style="font-size:11px;color:rgba(0,0,0,.5);">не отвечает<br>иконка 35%</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:14px;height:26px;padding:0 12px;border-radius:7px;background:linear-gradient(#3c3c40,#333338);">
+            <span style="width:15px;height:13px;border-radius:3px;border:1.5px solid rgba(255,255,255,.62);"></span>
+          </div>
+          <div style="font-size:11px;color:rgba(0,0,0,.5);">моделей нет<br>иконка 60%</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:5px;height:26px;padding:0 12px;border-radius:7px;background:linear-gradient(#3c3c40,#333338);">
+            <span style="width:15px;height:13px;border-radius:3px;border:1.5px solid rgba(255,255,255,.95);"></span>
+            <span style="width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,.6);"></span>
+          </div>
+          <div style="font-size:11px;color:rgba(0,0,0,.5);">загружена, простой<br>иконка 100% + точка 4 pt</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:5px;height:26px;padding:0 12px;border-radius:7px;background:linear-gradient(#3c3c40,#333338);">
+            <span style="width:15px;height:13px;border-radius:3px;border:1.5px solid rgba(255,255,255,.95);"></span>
+            <span style="font:12px/1 ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;color:#fff;">5.9 t/s</span>
+          </div>
+          <div style="font-size:11px;color:rgba(0,0,0,.5);">генерация<br>12 pt monospaced digit</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:5px;height:26px;padding:0 12px;border-radius:7px;background:linear-gradient(#3c3c40,#333338);">
+            <span style="width:15px;height:13px;border-radius:3px;border:1.5px solid #ffa519;"></span>
+            <span style="font:12px/1 ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;color:#fff;">2.1 t/s</span>
+          </div>
+          <div style="font-size:11px;color:rgba(0,0,0,.5);"><b>новое:</b> предупреждение<br>иконка янтарная, ширина та же</div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:center;gap:5px;height:26px;padding:0 12px;border-radius:7px;background:linear-gradient(#3c3c40,#333338);">
+            <span style="width:15px;height:13px;border-radius:3px;border:1.5px solid #ff6058;"></span>
+            <span style="width:4px;height:4px;border-radius:50%;background:#ff6058;"></span>
+          </div>
+          <div style="font-size:11px;color:rgba(0,0,0,.5);"><b>новое:</b> ошибка<br>красная до открытия панели</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:rgba(0,0,0,.55);max-width:760px;text-wrap:pretty;">Цвет — не «ёлка»: он ничего не добавляет к ширине и читается боковым зрением, а текст предупреждения всё равно нельзя уместить в меню-бар осмысленно. Иконка возвращается к обычной, как только панель открыли: предупреждение доставлено.</div>
+    </div>
+
+    <!-- WINDOWS -->
+    <div style="display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start;margin-top:24px;">
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-weight:600;">Окно вывода — 560 × 420, ⌘O</div>
+        <div style="width:560px;border-radius:10px;overflow:hidden;border:0.5px solid rgba(0,0,0,.18);box-shadow:0 18px 44px rgba(0,0,0,.22);background:#fbfaf9;">
+          <div style="height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#e9e7e5;border-bottom:0.5px solid rgba(0,0,0,.12);">
+            <span style="width:11px;height:11px;border-radius:50%;background:#ff5f57;"></span>
+            <span style="width:11px;height:11px;border-radius:50%;background:#febc2e;"></span>
+            <span style="width:11px;height:11px;border-radius:50%;background:#28c840;"></span>
+            <span style="margin-left:8px;font-size:13px;font-weight:600;">Output — qwen3.5-27b-32k</span>
+            <span style="margin-left:auto;display:flex;gap:2px;font-size:11px;">
+              <span style="padding:3px 9px;border-radius:5px;background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.15);">Output</span>
+              <span style="padding:3px 9px;color:rgba(0,0,0,.55);">Reasoning</span>
+              <span style="padding:3px 9px;color:rgba(0,0,0,.55);">Prompt</span>
+              <span style="padding:3px 9px;color:rgba(0,0,0,.55);">Tools</span>
+            </span>
+          </div>
+          <div style="padding:12px 14px;font:12px/1.55 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.82);height:300px;overflow:hidden;">The tailer keeps the last byte offset per inode. When `server.log` is rotated the inode changes, so on every read failure we stat the path again and reopen from zero rather than seeking to a stale offset.<br><br>Three consequences for `ServerLogTailer`:<br><br>1. the offset must live next to the file handle, not in the driver;<br>2. a rotation must not emit the whole new file as fresh events;<br>3. `print_timing` lines that arrive out of order between two reads still need to be attributed to the right slot.<br><br>I'll start with the first one, since the other two depend on where the offset<span style="display:inline-block;width:7px;height:14px;background:rgba(0,0,0,.7);vertical-align:-2px;animation:pulse 1s steps(2) infinite;"></span></div>
+          <div style="border-top:0.5px solid rgba(0,0,0,.12);padding:6px 14px;display:flex;gap:14px;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.5);">
+            <span>5.9 t/s</span><span>184 tok</span><span>0:31</span><span>codex-cli/0.42</span>
+            <span style="margin-left:auto;">Follow ✓</span><span>Wrap ✓</span>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);width:560px;text-wrap:pretty;">Обычное окно: не закрывается при потере фокуса, его можно оставить сбоку от редактора. Вкладки — четыре вида одного потока, а не четыре экрана.</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-weight:600;">Окно истории — 620 × 380</div>
+        <div style="width:620px;border-radius:10px;overflow:hidden;border:0.5px solid rgba(0,0,0,.18);box-shadow:0 18px 44px rgba(0,0,0,.22);background:#fbfaf9;">
+          <div style="height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#e9e7e5;border-bottom:0.5px solid rgba(0,0,0,.12);">
+            <span style="width:11px;height:11px;border-radius:50%;background:#ff5f57;"></span>
+            <span style="width:11px;height:11px;border-radius:50%;background:#febc2e;"></span>
+            <span style="width:11px;height:11px;border-radius:50%;background:#28c840;"></span>
+            <span style="margin-left:8px;font-size:13px;font-weight:600;">Requests</span>
+            <span style="margin-left:auto;font-size:11px;color:rgba(0,0,0,.5);">Today · 41 requests · 12.4K in / 8.9K out · 6m 12s</span>
+          </div>
+          <div style="display:grid;grid-template-columns:74px 1fr 108px 96px 74px 60px;padding:5px 12px;font:10px/1 ui-monospace,'SF Mono',Menlo,monospace;letter-spacing:.04em;color:rgba(0,0,0,.42);border-bottom:0.5px solid rgba(0,0,0,.1);">
+            <span>TIME</span><span>MODEL</span><span>CLIENT</span><span>LOAD·PROMPT·GEN</span><span style="text-align:right;">TOKENS</span><span style="text-align:right;">TOTAL</span>
+          </div>
+          <div style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;">
+            <div style="display:grid;grid-template-columns:74px 1fr 108px 96px 74px 60px;padding:6px 12px;background:rgba(10,99,209,.09);align-items:center;">
+              <span style="color:rgba(0,0,0,.5);">14:31:02</span><span style="color:#8f0012;">llama3.3-70b</span><span style="color:rgba(0,0,0,.55);">codex-cli</span><span style="color:#8f0012;">500 out of memory</span><span style="text-align:right;color:rgba(0,0,0,.35);">—</span><span style="text-align:right;">0.4 s</span>
+            </div>
+            <div style="display:grid;grid-template-columns:74px 1fr 108px 96px 74px 60px;padding:6px 12px;align-items:center;">
+              <span style="color:rgba(0,0,0,.5);">14:22:07</span><span>qwen3.5-27b-32k</span><span style="color:rgba(0,0,0,.55);">codex-cli</span><span style="color:rgba(0,0,0,.55);">8.4 · 1.2 · 1.2</span><span style="text-align:right;">12→8</span><span style="text-align:right;">10.8 s</span>
+            </div>
+            <div style="display:grid;grid-template-columns:74px 1fr 108px 96px 74px 60px;padding:6px 12px;align-items:center;background:rgba(0,0,0,.025);">
+              <span style="color:rgba(0,0,0,.5);">14:18:44</span><span>qwen3.5-27b-32k</span><span style="color:rgba(0,0,0,.55);">cursor</span><span style="color:rgba(0,0,0,.55);">— · 0.9 · 4.1</span><span style="text-align:right;">3.1K→412</span><span style="text-align:right;">5.0 s</span>
+            </div>
+            <div style="display:grid;grid-template-columns:74px 1fr 108px 96px 74px 60px;padding:6px 12px;align-items:center;">
+              <span style="color:rgba(0,0,0,.5);">14:17:20</span><span>qwen3.5-27b-32k</span><span style="color:rgba(0,0,0,.55);">codex-cli</span><span style="color:rgba(0,0,0,.55);">— · 0.4 · 22.6</span><span style="text-align:right;">9.8K→1.4K</span><span style="text-align:right;">23.0 s</span>
+            </div>
+            <div style="display:grid;grid-template-columns:74px 1fr 108px 96px 74px 60px;padding:6px 12px;align-items:center;background:rgba(0,0,0,.025);">
+              <span style="color:rgba(0,0,0,.5);">14:09:03</span><span>qwen3.5-27b-32k</span><span style="color:rgba(0,0,0,.55);">curl/8.7</span><span style="color:rgba(0,0,0,.55);">8.9 · 0.2 · 0.7</span><span style="text-align:right;">44→31</span><span style="text-align:right;">9.8 s</span>
+            </div>
+          </div>
+          <div style="border-top:0.5px solid rgba(0,0,0,.1);padding:10px 12px;display:flex;flex-direction:column;gap:6px;background:#f3f1ef;">
+            <div style="font-size:11px;color:rgba(0,0,0,.5);font-family:ui-monospace,'SF Mono',Menlo,monospace;">14:22:07 · qwen3.5-27b-32k:latest · codex-cli/0.42 · /api/chat 200</div>
+            <div style="display:flex;gap:2px;height:22px;border-radius:4px;overflow:hidden;">
+              <div style="flex:8.4;background:#a58bd8;display:flex;align-items:center;justify-content:center;font:10px/1 ui-monospace,monospace;color:#fff;">load 8.4 s</div>
+              <div style="flex:1.2;background:#7fb2e6;display:flex;align-items:center;justify-content:center;font:10px/1 ui-monospace,monospace;color:#fff;">1.2</div>
+              <div style="flex:1.2;background:#4a90d9;display:flex;align-items:center;justify-content:center;font:10px/1 ui-monospace,monospace;color:#fff;">1.2</div>
+            </div>
+            <div style="display:flex;gap:16px;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.55);">
+              <span>load 8.4 s</span><span>prompt 1.2 s</span><span>gen 1.2 s</span><span>12 in / 8 out</span><span style="margin-left:auto;color:#a8500a;">78% времени — загрузка модели</span>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);width:620px;text-wrap:pretty;">Единственная полоска в приложении. Оправдана: три числа отвечают «сколько», а пропорция отвечает «на что ушло время» — и делает это быстрее, чем их сравнение в уме.</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-weight:600;">Настройки — 420 pt</div>
+        <div style="width:420px;border-radius:10px;overflow:hidden;border:0.5px solid rgba(0,0,0,.18);box-shadow:0 18px 44px rgba(0,0,0,.22);background:#eceae8;">
+          <div style="height:38px;display:flex;align-items:center;gap:8px;padding:0 12px;background:#e9e7e5;border-bottom:0.5px solid rgba(0,0,0,.12);">
+            <span style="width:11px;height:11px;border-radius:50%;background:#ff5f57;"></span>
+            <span style="width:11px;height:11px;border-radius:50%;background:#febc2e;"></span>
+            <span style="width:11px;height:11px;border-radius:50%;background:#28c840;"></span>
+            <span style="margin-left:8px;font-size:13px;font-weight:600;">Settings</span>
+          </div>
+          <div style="padding:16px;display:flex;flex-direction:column;gap:14px;">
+            <div style="border-radius:8px;background:#fbfaf9;box-shadow:0 0 0 .5px rgba(0,0,0,.12);overflow:hidden;">
+              <div style="padding:9px 12px;display:flex;align-items:center;gap:10px;">
+                <span style="width:96px;color:rgba(0,0,0,.75);">Ollama</span>
+                <span style="flex:1;padding:4px 7px;border-radius:5px;background:#fff;box-shadow:0 0 0 .5px rgba(0,0,0,.2) inset;font:12px/1.3 ui-monospace,'SF Mono',Menlo,monospace;">http://127.0.0.1:11434</span>
+                <span style="width:7px;height:7px;border-radius:50%;background:#28a745;"></span>
+              </div>
+              <div style="height:1px;background:rgba(0,0,0,.08);margin-left:12px;"></div>
+              <div style="padding:9px 12px;display:flex;align-items:center;gap:10px;">
+                <span style="width:96px;color:rgba(0,0,0,.75);">Interception</span>
+                <span style="display:flex;align-items:center;width:34px;height:20px;border-radius:10px;background:#0a63d1;padding:2px;box-sizing:border-box;"><span style="margin-left:auto;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.3);"></span></span>
+                <span style="font:11px/1.3 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(0,0,0,.5);">:11435 → point your agent here</span>
+              </div>
+            </div>
+            <div style="font-size:11px;color:rgba(0,0,0,.5);padding:0 4px;text-wrap:pretty;">Без перехвата приложение показывает модели, память и скорость. Перехват добавляет промпт, живой вывод и обдумывание.</div>
+            <div style="border-radius:8px;background:#fbfaf9;box-shadow:0 0 0 .5px rgba(0,0,0,.12);overflow:hidden;">
+              <div style="padding:9px 12px;display:flex;align-items:center;gap:8px;color:rgba(0,0,0,.75);">
+                <span style="color:rgba(0,0,0,.4);">▸</span> Advanced
+                <span style="margin-left:auto;font-size:11px;color:rgba(0,0,0,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">log path · poll 2s · warnings</span>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <span style="font-size:11px;color:rgba(0,0,0,.4);">Launch at login</span>
+              <span style="padding:4px 14px;border-radius:6px;background:#0a63d1;color:#fff;font-size:12px;">Done</span>
+            </div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:rgba(0,0,0,.5);width:420px;text-wrap:pretty;">На виду только то, что пользователь меняет: адрес и перехват. Путь к логу, интервал опроса и пороги предупреждений — в Advanced; у всех есть рабочие значения по умолчанию, и отдельная кнопка Apply не нужна — применяем по потере фокуса.</div>
+      </div>
+    </div>
+
+    <!-- TYPOGRAPHY + DENSITY -->
+    <div style="display:flex;flex-wrap:wrap;gap:32px;margin-top:32px;">
+      <div style="width:560px;display:flex;flex-direction:column;gap:10px;">
+        <h2 style="margin:0;font:600 17px/1.2 -apple-system,sans-serif;">Типографика и плотность</h2>
+        <div style="display:flex;flex-direction:column;font-size:12px;border:1px solid rgba(0,0,0,.14);border-radius:8px;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#f0eeec;font:600 10px/1.2 ui-monospace,monospace;letter-spacing:.05em;color:rgba(0,0,0,.5);"><span>ЭЛЕМЕНТ</span><span>ШРИФТ</span><span>ЦВЕТ</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fbfaf9;"><span>Заголовок «Ollama»</span><span>13 semibold</span><span>.primary</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fff;"><span>Имя модели</span><span>13 medium, truncate .middle</span><span>.primary</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fbfaf9;"><span>Метаданные модели</span><span>11 mono</span><span>.secondary</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fff;"><span>Скорость / таймер</span><span>17 semibold mono, tabular</span><span>.primary</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fbfaf9;"><span>Заголовок блока</span><span>12 regular</span><span>.secondary</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fff;"><span>Вывод / промпт</span><span>11 mono, 1.45</span><span>.primary 78%</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fbfaf9;"><span>Обдумывание</span><span>11 mono italic</span><span>.secondary</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fff;"><span>Подвал, счётчики</span><span>11 mono</span><span>.tertiary</span></div>
+          <div style="display:grid;grid-template-columns:1.4fr 1fr 1fr;padding:7px 12px;background:#fbfaf9;"><span>Баннер, заголовок</span><span>12 medium</span><span>orange / red</span></div>
+        </div>
+        <div style="font-size:12px;color:rgba(0,0,0,.6);text-wrap:pretty;"><b>Моноширинные цифры — везде, где число меняется:</b> обратный отсчёт, t/s, длительности, токены, таймер обдумывания, элемент в меню-баре. Статические числа (27.8B, 17.0 GiB) тоже моно — они стоят в одной строке с меняющимися.</div>
+      </div>
+      <div style="width:400px;display:flex;flex-direction:column;gap:10px;">
+        <h2 style="margin:0;font:600 17px/1.2 -apple-system,sans-serif;">Отступы</h2>
+        <div style="font-size:12px;color:rgba(0,0,0,.7);display:flex;flex-direction:column;gap:5px;font-family:ui-monospace,'SF Mono',Menlo,monospace;">
+          <div>панель · ширина 340, радиус 10</div>
+          <div>блок · 8–9 сверху/снизу, 12 по бокам</div>
+          <div>внутри блока · 3 между строками</div>
+          <div>разделитель · 1 px, во всю ширину, hairline</div>
+          <div>подвал · 7 / 12, отдельный разделитель</div>
+          <div>баннер · 9 / 12, фон 16% системного цвета</div>
+          <div>хвост вывода · max-height 32 (2 строки)</div>
+          <div>цель клика · ≥ 22 pt по высоте строки</div>
+        </div>
+        <h2 style="margin:14px 0 0;font:600 17px/1.2 -apple-system,sans-serif;">Что резать первым</h2>
+        <ol style="margin:0;padding-left:18px;font-size:12px;color:rgba(0,0,0,.68);display:flex;flex-direction:column;gap:5px;">
+          <li>Строку последнего запроса в простое — она уже в истории.</li>
+          <li>Полосу контекста, пока заполнение &lt; 70% — это не новость.</li>
+          <li>Чипы инструментов — уводятся во вкладку Tools окна вывода.</li>
+          <li>Метаданные модели во вторую строку по наведению (имя + отсчёт остаются).</li>
+          <li>Счётчик резидента — если модель одна, её размер уже показан выше.</li>
+          <li><b>Не режется никогда:</b> имя модели, обратный отсчёт, скорость, баннер.</li>
+        </ol>
+      </div>
+    </div>
+
+    <!-- DARK -->
+    <sc-if value="{{ showDark }}" hint-placeholder-val="{{ true }}">
+    <div style="margin-top:32px;display:flex;flex-direction:column;gap:14px;">
+      <h2 style="margin:0;font:600 17px/1.2 -apple-system,sans-serif;">Тёмная тема</h2>
+      <div style="display:flex;gap:32px;flex-wrap:wrap;padding:28px;border-radius:12px;background:#1b1b1d;">
+        <div style="width:340px;border-radius:10px;background:#2c2c2e;border:0.5px solid rgba(255,255,255,.12);box-shadow:0 12px 32px rgba(0,0,0,.5);overflow:hidden;color:#fff;">
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">qwen3.5-27b-32k:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.45);">evicts in 4:58</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.45);">
+              <span>27.8B</span><span>Q4_K_M</span><span>17.0 GiB</span><span>GPU</span><span>ctx 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+          <div style="padding:9px 12px;display:flex;flex-direction:column;gap:5px;background:rgba(10,132,255,.12);">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="width:6px;height:6px;border-radius:50%;background:#0a84ff;align-self:center;animation:pulse 1.4s ease-in-out infinite;"></span>
+              <span style="font-size:12px;color:rgba(255,255,255,.62);">Generating</span>
+              <span style="margin-left:auto;font:600 17px/1 ui-monospace,'SF Mono',Menlo,monospace;font-variant-numeric:tabular-nums;">5.9 t/s</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.45);">
+              <span>slot 0</span><span>codex-cli/0.42</span><span>0:31</span><span>184 tok</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:6px;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.45);">
+              <span>ctx</span>
+              <span style="flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.15);overflow:hidden;"><span style="display:block;width:31%;height:100%;background:rgba(255,255,255,.5);"></span></span>
+              <span>9.9K / 32K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:5px;">
+            <div style="display:flex;align-items:center;gap:6px;font-size:11px;color:rgba(255,255,255,.45);">
+              <span style="color:rgba(255,255,255,.3);">▾</span><span>Output</span>
+              <span style="margin-left:auto;color:#4ea1ff;">Open window ⌘O</span>
+            </div>
+            <div style="font:11px/1.45 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.8);max-height:32px;overflow:hidden;">…so the tailer keeps the last offset and re-opens the file when the inode changes, which is what happens on log rot</div>
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(255,255,255,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">17.0 GiB resident</span>
+            <span style="display:flex;gap:12px;color:#4ea1ff;"><span>History…</span><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+
+        <div style="width:340px;border-radius:10px;background:#2c2c2e;border:0.5px solid rgba(255,255,255,.12);box-shadow:0 12px 32px rgba(0,0,0,.5);overflow:hidden;color:#fff;">
+          <div style="padding:9px 12px;background:rgba(255,159,10,.2);display:flex;gap:8px;">
+            <span style="width:11px;height:11px;border-radius:50%;background:#ff9f0a;flex:none;margin-top:2px;"></span>
+            <div style="display:flex;flex-direction:column;gap:2px;">
+              <div style="font-size:12px;font-weight:500;color:#ffbe57;">Reloaded 4× in the last hour</div>
+              <div style="font-size:11px;color:rgba(255,255,255,.6);text-wrap:pretty;">33 s spent loading weights. Two models are competing for VRAM.</div>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+          <div style="padding:9px 12px 8px;display:flex;align-items:baseline;justify-content:space-between;">
+            <span style="font-weight:600;font-size:13px;">Ollama</span>
+            <span style="font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.35);">127.0.0.1:11434</span>
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+          <div style="padding:8px 12px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">qwen3.5-27b-32k:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.45);">evicts in 0:22</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.45);">
+              <span>27.8B</span><span>Q4_K_M</span><span>17.0 GiB</span><span>GPU</span><span>ctx 32K</span>
+            </div>
+          </div>
+          <div style="padding:0 12px 8px;display:flex;flex-direction:column;gap:3px;">
+            <div style="display:flex;align-items:baseline;gap:8px;">
+              <span style="font-weight:500;">nomic-embed-text:latest</span>
+              <span style="margin-left:auto;font:11px/1 ui-monospace,'SF Mono',Menlo,monospace;color:#ffbe57;">eviction due</span>
+            </div>
+            <div style="display:flex;gap:8px;font:11px/1.2 ui-monospace,'SF Mono',Menlo,monospace;color:rgba(255,255,255,.45);">
+              <span>137M</span><span>F16</span><span>0.3 GiB</span><span>GPU</span><span>ctx 8K</span>
+            </div>
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+          <div style="padding:7px 12px;display:flex;align-items:center;justify-content:space-between;font-size:12px;">
+            <span style="color:rgba(255,255,255,.55);">Generating</span>
+            <span style="color:rgba(255,255,255,.3);font-family:ui-monospace,'SF Mono',Menlo,monospace;">idle · 12s</span>
+          </div>
+          <div style="height:1px;background:rgba(255,255,255,.1);"></div>
+          <div style="padding:7px 12px 8px;display:flex;align-items:center;justify-content:space-between;font-size:11px;">
+            <span style="color:rgba(255,255,255,.4);font-family:ui-monospace,'SF Mono',Menlo,monospace;">17.3 GiB resident</span>
+            <span style="display:flex;gap:12px;color:#4ea1ff;"><span>History…</span><span>Settings…</span><span>Quit</span></span>
+          </div>
+        </div>
+
+        <div style="width:300px;color:rgba(255,255,255,.6);font-size:12px;display:flex;flex-direction:column;gap:10px;text-wrap:pretty;">
+          <div>Тёмная тема — не инверсия: фон панели 2C2C2E, разделители 10% белого, акценты берутся из системных <span style="font-family:ui-monospace,monospace;">systemBlue/Orange</span> в их тёмных вариантах.</div>
+          <div>Справа — случай двух моделей и предупреждения о перезагрузках. Строки моделей не разделены линиями: их разделяет пустота 8 pt, линия появилась бы у каждой и превратила бы список в таблицу.</div>
+          <div><b>eviction due</b> — янтарный, но не баннер: модель всё ещё работает, это не проблема, а особенность ленивой выгрузки Ollama.</div>
+        </div>
+      </div>
+    </div>
+    </sc-if>
+
+  </div>
+</section>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showDark&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    return { showDark: this.props.showDark ?? true };
+  }
+}
+</script>
+</body>
+</html>
