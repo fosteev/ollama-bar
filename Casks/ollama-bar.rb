@@ -22,7 +22,8 @@ cask "ollama-bar" do
     strategy :github_latest
   end
 
-  depends_on macos: ">= :sequoia"
+  # A bare symbol is the minimum version; the ">= :sequoia" string form is deprecated.
+  depends_on macos: :sequoia
 
   app "OllamaBar.app"
 
